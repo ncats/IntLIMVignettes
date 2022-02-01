@@ -1,0 +1,229 @@
+---
+title: "Running the linear model on the NCI-60 cell lines"
+author: "Tara Eicher and Jalal K. Siddiqui, PhD"
+date: "1/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+The NCI-60 cancer cell lines were developed as a drug screening tool focusing on a range of cancer types.  In this vignette, we compare drug scores of NCI-60 cancer cell lines(1, 2).
+
+## Loading in IntLIM and Files
+
+IntLIM, available from Github, can be installed as in the documentation.  Once IntLIM is installed, what is necessary is loading in the library.  
+
+```{r}
+rm(list = ls())
+if(!require("devtools")){
+  install.packages("devtools")
+}
+library("devtools")
+install_github("ncats/IntLIM@liz_dev")
+library(IntLIM)
+```
+
+For the NCI-60 cell lines, metabolomics and gene expression data were downloadable from the DTP website (https://wiki.nci.nih.gov/display/ncidtpdata/molecular+target+data).  The Metabolon data consisting of 353 metabolites and 58 cell lines with 177 technical replicates total was filtered for metabolites that had a median coefficient of variation of below 0.3.  The coefficient value was arbitrarily selected to filter out technical replicates having high variability.  The resulting metabolite abundance data set of 280 metabolites was subsequently log2 transformed. Probes from the Chiron Affymetrix U133 were mapped to genes using the Ensembl database hgu133.plus.db.  Probes mapping to more than one gene were removed.  In cases where more than one probe was matching to a given gene, only the probe with the highest mean expression was used for analysis.  This resulted in a total of 17,987 genes.   
+
+This data has been formatted for IntLIM.  We load in the data as follows.  The nci60.csv meta file contains a list of phenotypic data file, metabolite data file, gene expression data file, metabolite meta file, and gene expression meta file. The function OutputStats will give a summary of the NCI-60 data
+
+```{r}
+csvfile <- file.path(getwd(), "/NCI60_data/nci60.csv")
+inputData <- IntLIM::ReadData(inputFile = csvfile,analyteType1id='id',analyteType2id='id',
+                              class.feat = list(drugscore = "numeric"))
+IntLIM::ShowStats(inputData)
+```
+
+From the OutputStats, we find that we have gene expression data involving 17,987 genes and metabolite abundance data involving 280 metabolites with 57 cell lines.  
+
+## Filtering Gene Expression and Metabolite Data
+
+We remove genes with mean belows below the 10th percentile.  Furthermore, we remove metabolites with more than 80% missing values.  This results in gene expression data involving 16188 genes and 57 cell lines and metabolite abundance data involving 220 metabolites and 58 cell lines.  
+
+```{r}
+inputDatafilt <- IntLIM::FilterData(inputData,analyteType1perc=0.10, analyteType2miss = 0.80)
+IntLIM::ShowStats(inputDatafilt)
+```
+
+We can obtain boxplot distributions of the data as follows.
+
+```{r}
+IntLIM::PlotDistributions(inputDatafilt)
+```
+
+## Principal Component Analysis
+
+The principal component analysis is performed on filtered metabolite and gene expression data to obtain visual representations showing how different sub-sections of the data could be grouped into different clusters.  Common samples are shown.  Darker blue samples indicate higher drug scores.
+```{r}
+PlotPCA(inputDatafilt, stype = "drugscore")
+```
+
+## Running Linear Model
+
+The linear model is for integrating transcriptomic and metabolomics data is:  E(m|g,t) = β1 + β2 g + β3 p + β4 (g:p) + ε where ‘m’ and ‘g’ are log-transformed metabolite abundances and gene levels respectively, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(g:p)’ is the association between gene expression and phenotype, and ‘ε’ is the error term that is normally distributed.  A statistically significant p value of the ‘(g:p)’ association term indicates that the slope relating gene expression and metabolite abundance is different from one phenotype compared to another. We run a linear model that included 16188 genes and 220 metabolites (total of 3,561,360 possible associations and hence models).  For genes and metabolites that had standard deviations of 0 in one of the groups, we assign a p value of NA.  The model is run as below by calling RunIntLim().  DistPvalues() allows us to obtain a distribution of p-values for the (g:p) term.  We also show a volcano plot showing the relationship between phenotype correlations and FDR adjusted p-values.  
+
+```{r}
+myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
+                           independent.var.type = 1, outcome = 2)
+IntLIM::DistPvalues(myres, adjusted = FALSE)
+IntLIM::DistRSquared(myres)
+IntLIM::InteractionCoefficientGraph(inputResults = myres, 
+                                    interactionCoeffPercentile = 0.9)
+```
+```{r}
+IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
+                        pvalcutoff = 0.05)
+```
+
+The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (g:p) association coefficient and calculate the correlations of the gene-metabolite pairs in each group (BPO and Leukemia) for the filtered results.  We further may only interested in results that have an absolute correlation value difference (0.50 selected here). This is done with the ProcessResults function.  In addition we also develop a heatmap of the gene-metabolite association correlations for the selected groups.  
+
+```{r}
+myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0.2)
+OutputResults(inputResults = myres.sig, filename = "NCI60pairs.csv")
+```
+
+From this model we find 2,517 gene-metabolite correlations that have an association FDR-adjusted p-value of 0.10. From the histogram plots below, we can see that most genes are associated with a single metabolite and that most metabolites are associated with a single gene. However, we see that some
+genes are associated with up to 12 metabolites and that some metabolites are associated with up to
+359 genes.
+
+We can see that a few of the metabolites associated with high numbers of genes by drug score are 2'-deoxyuridine 5'-triphosphate, inositol 1-phosphate, beta-nicotinamide adenine dinucleotide, and cholesterol.
+```{r}
+# Plot histogram.
+IntLIM::HistogramPairs(myres.sig, type = "outcome")
+IntLIM::HistogramPairs(myres.sig, type = "independent")
+
+# Tabulate gene and metabolite counts.
+table.gene.count <- as.data.frame(table(as.character(myres.sig$Analyte1)))
+table.metab.count <- as.data.frame(table(as.character(myres.sig$Analyte2)))
+print(table.gene.count[order(-table.gene.count$Freq)[1:100],])
+print(table.metab.count[order(-table.metab.count$Freq)[1:100],])
+
+# Print gene associations with metabolites of interest.
+print(myres.sig[which(myres.sig$Analyte2 == "X2..deoxyuridine.5..triphosphate"),])
+print(myres.sig[which(myres.sig$Analyte2 == "inositol.1.phosphate"),])
+print(myres.sig[which(myres.sig$Analyte2 == "beta.nicotinamide.adenine.dinucleotide"),])
+print(myres.sig[which(myres.sig$Analyte2 == "cholesterol"),])
+```
+
+We can show some example plots of some of these pairs.  The first example is the CHERP vs. beta-nicotinamide adenine dinucleotide.
+
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, 
+                 independentAnalyteOfInterest = "CHERP", 
+                 outcomeAnalyteOfInterest = "beta-nicotinamide adenine dinucleotide",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+Another example is MGA vs. inositol-1-phosphate.  
+
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, 
+                 independentAnalyteOfInterest = "MGA", 
+                 outcomeAnalyteOfInterest = "inositol-1-phosphate",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+Another example is CHD4 vs. cholesterol.
+
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, 
+                 independentAnalyteOfInterest = "CHD4", 
+                 outcomeAnalyteOfInterest = "cholesterol",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+Finally, we run 5-fold cross-validation to determine the overlap of significant pairs across folds.
+```{r eval = FALSE}
+crossValResults <- RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
+                   analyteType2miss = 0.80, stype="drugscore", outcome = c(1), 
+                   independent.var.type = c(2), pvalcutoff = 0.10, 
+                   rsquaredCutoff = 0.2,
+                   folds = 5, continuous = TRUE)
+IntLIM::PlotFoldOverlapUpSet(crossValResults$processed)
+
+# Find all pairs.
+union_all <- unique(unlist(lapply(1:5, function(i){
+  return(rownames(crossValResults$processed[[i]]))
+})))
+str(union_all)
+
+# Find intersections.
+union_4 <- unique(unlist(lapply(1:5, function(i){
+  result <- lapply(sort(setdiff(1:5,i)), function(j){
+    return(rownames(crossValResults$processed[[j]]))
+  })
+  result_intersect <- Reduce(intersect, result)
+  return(result_intersect)
+})))
+str(union_4)
+
+# Find intersections.
+combs <- utils::combn(1:5,2)
+union_3 <- unique(unlist(lapply(1:ncol(combs), function(i){
+  result <- lapply(sort(setdiff(1:5,unlist(combs[,i]))), function(j){
+    return(rownames(crossValResults$processed[[j]]))
+  })
+  result_intersect <- Reduce(intersect, result)
+  return(result_intersect)
+})))
+str(setdiff(union_3, union_4))
+
+# Print samples excluded from each fold.
+pdata <- read.csv(file.path(getwd(), "/NCI60_data/pData.csv"), row.names = 1)
+rownames(pdata) <- make.names(rownames(pdata))
+table(pdata$cancertype)
+for(fold in crossValResults$folds){
+  excluded <- rownames(fold$training@sampleMetaData)
+  print(table(pdata[excluded, "cancertype"]))
+}
+```
+
+This chunk evaluates a subset of pairs using glm, illustrating the difference in running time
+between glm and IntLIM. In a typical case, running this chunk won't be necessary.
+```{r}
+library(stats)
+library(rsq)
+
+# Subset data.
+inputDatafilt@analyteType1 <- inputDatafilt@analyteType1[1:10,]
+
+# Run IntLIM.
+myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
+                           independent.var.type = 1, outcome = 2)
+
+# Run GLM.
+starttime <- Sys.time()
+subdat <- NULL
+suppressMessages({pvals = lapply(rownames(inputDatafilt@analyteType2), function(m){
+  pvals_single = lapply(rownames(inputDatafilt@analyteType1), function(g){
+    subdat = data.frame(drugscore=inputDatafilt@sampleMetaData, 
+                        m=inputDatafilt@analyteType2[m,], 
+                        g=inputDatafilt@analyteType1[g,])
+    attach(subdat)
+    form_glm = "m ~ g + drugscore + g:drugscore"
+    myfit = glm(form_glm, data = subdat)
+    
+    pvals = coef(summary(myfit))[,4]
+    result = data.frame(rsq(myfit), pvals["g"], pvals["g:drugscore"], 
+                        pvals["drugscore"])
+    colnames(result) = c("Rsquared", "Pval_gene", "Pval_interaction", "Pval_drugscore")
+    rownames(result) = paste(m, g, sep = "_")
+    return(result)
+  })
+  result_metab = do.call("rbind", pvals_single)
+})})
+endtime <- Sys.time()
+print(endtime - starttime)
+```
+
+### References
+
+1.  Su, G., Burant, C.F., Beecher, C.W., Athey, B.D. and Meng, F. (2011) Integrated metabolome and transcriptome analysis of the NCI60 dataset. BMC bioinformatics, 12, S36.
+
+2.  Reinhold, W. C., Sunshine, M., Liu, H., Varma, S., Kohn, K. W., Morris, J., Doroshow, J., &#38; Pommier, Y. (2012). CellMiner: a web-based suite of genomic and pharmacologic tools to explore transcript and drug patterns in the NCI-60 cell line set. Cancer Research, 72(14), 3499. https://doi.org/10.1158/0008-5472.CAN-12-1370.

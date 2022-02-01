@@ -1,0 +1,198 @@
+---
+title: "Running the linear model on breast cancer study"
+author: "Tara Eicher and Jalal K. Siddiqui, PhD"
+date: "1/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+##Introduction
+
+A previous study had conducted both gene expression and metabolomics profiling of tissue samples from breast cancer patients (1).  This vigenette will highlight the analysis we conduct on the breast cancer data.  More details can be found in <a href="https://bmcbioinformatics.biomedcentral.com/articles/10.1186/s12859-018-2085-6" target="_blank"> our publication "IntLIM: integration using linear models of metabolomics and gene expression data"</a> (2).
+
+##Loading in IntLIM and Files
+
+IntLIM, available from Github, can be installed as in the documentation.  Once IntLIM is installed, what is necessary is loading in the library.  First clear the workspace.  
+
+```{r}
+rm(list = ls())
+if(!require("devtools")){
+  install.packages("devtools")
+}
+library("devtools")
+install_github("ncats/IntLIM@liz_dev")
+library(IntLIM)
+```
+
+For breast cancer study, both gene expression (available on Gene Expression Omnibus Accession Number:  GSE37751) and metabolomics(1)  (http://www.jci.org/articles/view/71180/sd/2) data are available online.   Much of this data had been processed as previously described (1).  Probes from the Affymetrix data not mapping to a gene symbol were removed.  Additionally, as with NCI-60 data, only the probe corresponding to the highest mean expression was used for analysis when multiple probes corresponded to a single gene. This resulted in a total of 20,254 genes for 108 patient samples.  The Metabolon data did not need to be filtered by coefficient of variation, as there were no technical replicates.  The resulting data consisted of 536 metabolites with 132 patient samples.    
+
+This data has been formatted for IntLIM.  We load in the data as follows.  The bc.ambs.csv meta file contains a list of phenotypic data file, metabolite data file, gene expression data file, metabolite meta file, and gene expression meta file. The function OutputStats will give a summary of the NCI-60 data
+
+Note:  The data is found in the BC.data.vignette.zip file.  This file has to be de-zipped prior to loading.  
+
+Load in the breast cancer data using the ReadData() function.  ShowStats allow us to 
+
+```{r}
+csvfile <- file.path(getwd(), "/BRCA_data/input.csv")
+inputData <- IntLIM::ReadData(inputFile = csvfile,analyteType1id='id',analyteType2id='id',
+                              class.feat = list(DIAG = "factor"))
+IntLIM::ShowStats(inputData)
+```
+
+From the OutputStats, we find that we have gene expression data involving 20,254 genes and 536 metabolites with 108 patient samples.  
+##Filtering Gene Expression and Metabolite Data
+
+The __FilterData()__ function is used to filter the data.  We remove genes with mean belows below the 10th percentile.  Furthermore, we remove metabolites with more than 80% missing values.  This results in gene expression data involving 18,228 genes, 536 metabolites, and 108 patient samples.  
+
+```{r}
+inputDatafilt <- IntLIM::FilterData(inputData,analyteType1perc=0.10, analyteType2miss = 0.80)
+IntLIM::ShowStats(inputDatafilt)
+```
+
+We can obtain boxplot distributions of the data as follows. This is used to make figures.  
+
+```{r}
+IntLIM::PlotDistributions(inputDatafilt)
+```
+
+##Principal Component Analysis
+
+The principal component analysis is performed on filtered metabolite and gene expression data to obtain visual representations showing how different sub-sections of the data could be grouped into different clusters.  Common samples patient samples (either tumor or adjacent non-tumor samples).  Blue samples indicate tumor samples and red samples indicate non-tumor samples.  Note the clear delineation of samples.  
+
+```{r}
+PlotPCA(inputDatafilt, stype = "DIAG")
+```
+
+##Running Linear Model
+
+The linear model is for integrating multi-omics data is:  E(a_i|a_j,t) = β1 + β2 a_j + β3 p + β4 (a_j:p) + ε where ‘a_i’ and ‘a_j’ are log-transformed analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between gene expression and phenotype, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels is different from one phenotype compared to another. We run a linear model on tumor (n = 61) and non-tumor samples (n = 47) that included 18,228 genes and 379 metabolites (total of 6,908,412 possible associations and hence models).  For genes and metabolites that had standard deviations of 0 in one of the groups, we assign a p-value of NA.  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (g:p) term.  The __pvalCorrVolcano()__ function allows us to observe how p-values vary with correlation differences.  
+
+```{r}
+myres <- IntLIM::RunIntLim(inputDatafilt, stype="DIAG", outcome = 2, independent.var.type = 1)
+IntLIM::DistPvalues(myres, adjusted = FALSE)
+IntLIM::pvalCorrVolcano(myres, inputDatafilt, diffcorr = 0.5, pvalcutoff = 0.05)
+```
+
+The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (a_j:p) association coefficient and calculate the correlations of the gene-metabolite pairs in each group (tumor and non-tumor) for the filtered results.  We further may only interested in results that have an absolute correlation value difference (0.50 selected here). This is done with the __ProcessResults()__ function.  In addition we also develop a heatmap of the gene-metabolite association correlations for the selected groups.  
+```{r}
+myres10 <- IntLIM::ProcessResults(myres,  inputDatafilt, diffcorr = 0.50, pvalcutoff = 0.10)
+IntLIM::CorrHeatmap(myres10)
+
+OutputResults(myres10, filename = "bcresults10.csv")
+```
+
+We find that we obtain 14,906 correlations.  We try to lessen the number by setting a more stringent p-value cutoff of 0.05 as done below.  
+
+```{r}
+myres5 <- IntLIM::ProcessResults(myres,  inputDatafilt, diffcorr = 0.50, pvalcutoff = 0.05)
+IntLIM::CorrHeatmap(myres5, top_pairs = 3000)
+
+OutputResults(myres5, filename = "bcresults5.csv")
+```
+
+We can show some example plots of some of these pairs.  The first example is the CDK14 vs. adrenate (22:4n6).  
+
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "CDK14", 
+                 outcomeAnalyteOfInterest = "adrenate (22:4n6)",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+We do find that the pair 2-hydroxyglutarate and GPT2 is significant at FDR adjusted p-value of 0.05 and correlation difference of over 0.5.  
+
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "GPT2", 
+                 outcomeAnalyteOfInterest = "2-hydroxyglutarate",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+GPT2 and MYC are not linked as was in the Ambs paper.  
+
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "MYC", 
+                 outcomeAnalyteOfInterest = "2-hydroxyglutarate",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+##Analyzing Clusters
+
+We will cut the heatmap as below. We find 2,323 gene-metabolite pairs in the Tumor-correlated cluster and 3,936 pairs in the Tumor anti-correlated cluster.  The summary of the cluster.1 shows that the gene-metabolite correlations are positive for the tumor samples making this into the tumor-correlated cluster.  For cluster.2, the gene-metabolite correlations are negative for tumor samples making it the tumor anti-correlated cluster.  
+```{r}
+clusters <- GetCorrClusters(myres5, treecuts = 2)
+cluster.1 <- clusters[which(clusters$Cluster == 1),]
+cluster.2 <- clusters[which(clusters$Cluster == 2),]
+dim(cluster.1)
+dim(cluster.2)
+summary(cluster.1$TUMORCorr)
+summary(cluster.2$TUMORCorr)
+```
+
+We have 620 unique genes in the Tumor-correlated cluster and 942 unique genes in the Tumor-anti-correlated cluster.  
+
+```{r}
+tumor.corr.uniqgene <- unique(cluster.1$IndependentAnalyte)
+tumor.anti.corr.uniqgene <- unique(cluster.2$IndependentAnalyte)
+
+write.csv(tumor.corr.uniqgene, "tumor.corr.uniqgene.bc.csv")
+write.csv(tumor.anti.corr.uniqgene, "tumor.anti.corr.uniqgene.bc.csv")
+length(tumor.corr.uniqgene)
+length(tumor.anti.corr.uniqgene)
+```
+
+We also find out how many unique metabolites we have.  We have 231 in the tumor-correlated cluster and 249 in the tumor-anti-correlated cluster.
+
+```{r}
+tumor.corr.uniqmetab <- unique(cluster.1$OutcomeAnalyte)
+tumor.anti.corr.uniqmetab <- unique(cluster.2$OutcomeAnalyte)
+length(tumor.corr.uniqmetab)
+length(tumor.anti.corr.uniqmetab)
+```
+
+We need to fit the metabolite data to Human Metabolome Database (HMDB) IDs
+
+The Metabolon fData file is imported as follows. This is used to convert the list of unique metabolites into HMDB IDs for the IPA analysis.  
+
+```{r}
+fData.metab <- read.csv(file.path(getwd(), "/BRCA_data/fData.metab.csv"))
+hmdb.match <- fData.metab[,c('id', 'HMDB_ID')]
+rownames(hmdb.match) <- hmdb.match$id
+write.csv(hmdb.match, "hmdb.match.csv")
+
+tumor.corr.uniqmetab.hmdbid <- hmdb.match[as.character(tumor.corr.uniqmetab),]
+tumor.corr.hmdb.list <- tumor.corr.uniqmetab.hmdbid[is.na(tumor.corr.uniqmetab.hmdbid$HMDB_ID) == FALSE,'HMDB_ID']
+
+tumor.anti.corr.uniqmetab.hmdbid <- hmdb.match[as.character(tumor.anti.corr.uniqmetab),]
+tumor.anti.corr.hmdb.list <- tumor.anti.corr.uniqmetab.hmdbid[is.na(tumor.anti.corr.uniqmetab.hmdbid$HMDB_ID) == FALSE,'HMDB_ID']
+
+
+write.csv(tumor.corr.hmdb.list, "tumor.corr.uniqmetab.hmdbid.bc.csv")
+write.csv(tumor.anti.corr.hmdb.list, "tumor.anti.corr.uniqmetab.hmdbid.bc.csv")
+```
+
+The following 18 genes are found to be in both clusters.  
+
+```{r}
+intersect(tumor.corr.uniqgene, tumor.anti.corr.uniqgene)
+length(intersect(tumor.corr.uniqgene, tumor.anti.corr.uniqgene))
+```
+
+These 191 metabolites are found in both clusters
+
+```{r}
+intersect(tumor.corr.uniqmetab, tumor.anti.corr.uniqmetab)
+length(intersect(tumor.corr.uniqmetab, tumor.anti.corr.uniqmetab))
+```
+
+The list of unique genes and metabolites for each cluster can be used to conduct a pathway enrichment analysis.  
+
+###Reference
+
+1. Terunuma A, Putluri N, Mishra1 P, Mathé EA, Dorsey TH, Yi M, Wallace TA, Issaq HJ, Zhou M, Killian JK, Stevenson HS, Karoly ED, Chan K, Samanta S, Prieto D, Hsu TY.T., Kurley SJ, Putluri V, Sonavane R, Edelman DC, Wulff J, Starks AM, Yang Y, Kittles RA, Yfantis HG, Lee DH, Ioffe OB, Schiff R, Stephens RM, Meltzer PS, Veenstra TD, Westbrook TF, Sreekumar A, and Stefan Ambs S. MYC-driven 2-hydroxyglutarate associates with poor prognosis in breast cancer. J Clin Invest. 2014 Jan 2;124(1):398-412.
+
+2.  Siddiqui JK, Baskin E, Liu M, Cantemir-Stone CZ, Zhang B, Bonneville R, McElroy JP, Coombes KR, Mathé EA. IntLIM: integration using linear models of metabolomics and gene expression data. BMC bioinformatics. 2018 Dec;19(1):81.

@@ -1,0 +1,6 @@
+type,filenames
+analyteType2,metabData.csv
+analyteType1,geneData.csv
+analyteType2MetaData,fData.metab.csv
+analyteType1MetaData,fData.gene.csv
+sampleMetaData,pData.csv
