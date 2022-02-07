@@ -23,8 +23,11 @@ if(!require("devtools")){
   install.packages("devtools")
 }
 library("devtools")
-install_github("ncats/IntLIM@liz_dev")
+if(!require("IntLIM")){
+  install_github("ncats/IntLIM@liz_dev")
+}
 library(IntLIM)
+library(rmarkdown)
 ```
 
 For the NCI-60 cell lines, metabolomics and gene expression data were downloadable from the DTP website (https://wiki.nci.nih.gov/display/ncidtpdata/molecular+target+data).  The Metabolon data consisting of 353 metabolites and 58 cell lines with 177 technical replicates total was filtered for metabolites that had a median coefficient of variation of below 0.3.  The coefficient value was arbitrarily selected to filter out technical replicates having high variability.  The resulting metabolite abundance data set of 280 metabolites was subsequently log2 transformed. Probes from the Chiron Affymetrix U133 were mapped to genes using the Ensembl database hgu133.plus.db.  Probes mapping to more than one gene were removed.  In cases where more than one probe was matching to a given gene, only the probe with the highest mean expression was used for analysis.  This resulted in a total of 17,987 genes.   
@@ -42,10 +45,10 @@ From the OutputStats, we find that we have gene expression data involving 17,987
 
 ## Filtering Gene Expression and Metabolite Data
 
-We remove genes with mean belows below the 10th percentile.  Furthermore, we remove metabolites with more than 80% missing values.  This results in gene expression data involving 16188 genes and 57 cell lines and metabolite abundance data involving 220 metabolites and 58 cell lines.  
+We remove genes with mean belows below the 10th percentile.  Furthermore, we remove analytes with more than 80% missing values (where an NA value indicates missingness).  This results in gene expression data involving 16,188 genes and metabolite abundance data involving 280 metabolites in 57 cell lines.  
 
 ```{r}
-inputDatafilt <- IntLIM::FilterData(inputData,analyteType1perc=0.10, analyteType2miss = 0.80)
+inputDatafilt <- IntLIM::FilterData(inputData,analyteType1perc=0.10, analyteMiss = 0.80)
 IntLIM::ShowStats(inputDatafilt)
 ```
 
@@ -64,7 +67,7 @@ PlotPCA(inputDatafilt, stype = "drugscore")
 
 ## Running Linear Model
 
-The linear model is for integrating transcriptomic and metabolomics data is:  E(m|g,t) = β1 + β2 g + β3 p + β4 (g:p) + ε where ‘m’ and ‘g’ are log-transformed metabolite abundances and gene levels respectively, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(g:p)’ is the association between gene expression and phenotype, and ‘ε’ is the error term that is normally distributed.  A statistically significant p value of the ‘(g:p)’ association term indicates that the slope relating gene expression and metabolite abundance is different from one phenotype compared to another. We run a linear model that included 16188 genes and 220 metabolites (total of 3,561,360 possible associations and hence models).  For genes and metabolites that had standard deviations of 0 in one of the groups, we assign a p value of NA.  The model is run as below by calling RunIntLim().  DistPvalues() allows us to obtain a distribution of p-values for the (g:p) term.  We also show a volcano plot showing the relationship between phenotype correlations and FDR adjusted p-values.  
+The linear model for integrating multi-omics and data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels differs by phenotype. We run a linear model that included 16,188 genes and 280 metabolites (total of 4,532,640 possible associations and hence models).  For genes and metabolites that had standard deviations of 0 in one of the groups, we assign a p value of NA.  The model is run as below by calling RunIntLim().  DistPvalues() allows us to obtain a distribution of p-values for the (a_j:p) term.  We also show a volcano plot showing the relationship between interaction coefficients and FDR adjusted p-values.  
 
 ```{r}
 myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
@@ -79,14 +82,16 @@ IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
                         pvalcutoff = 0.05)
 ```
 
-The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (g:p) association coefficient and calculate the correlations of the gene-metabolite pairs in each group (BPO and Leukemia) for the filtered results.  We further may only interested in results that have an absolute correlation value difference (0.50 selected here). This is done with the ProcessResults function.  In addition we also develop a heatmap of the gene-metabolite association correlations for the selected groups.  
-
+The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (a_j:p) association coefficient. We further may only interested in results where the interaction coefficient is in the top Xth percentile (e.g. 50th shown here) and where the model fit as measured by R^2 value is above a given cutoff (e.g. 0.2). This is done with the __ProcessResults()__ function.
 ```{r}
-myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0.2)
+myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0.2,
+                                    interactionCoeffPercentile = 0.5)
+str(unique(as.character(myres.sig$Analyte1)))
+str(unique(as.character(myres.sig$Analyte2)))
 OutputResults(inputResults = myres.sig, filename = "NCI60pairs.csv")
 ```
 
-From this model we find 2,517 gene-metabolite correlations that have an association FDR-adjusted p-value of 0.10. From the histogram plots below, we can see that most genes are associated with a single metabolite and that most metabolites are associated with a single gene. However, we see that some
+From this model we find 2,517 gene-metabolite correlations that meet our criteria. From the histogram plots below, we can see that most genes are associated with a single metabolite and that most metabolites are associated with a single gene. However, we see that some
 genes are associated with up to 12 metabolites and that some metabolites are associated with up to
 359 genes.
 
@@ -138,13 +143,15 @@ IntLIM::PlotPair(inputDatafilt, myres,
                  independentVariable = 1,
                  outcome = 2)
 ```
-Finally, we run 5-fold cross-validation to determine the overlap of significant pairs across folds.
+## Cross-Validation
+We then run 5-fold cross-validation to determine the overlap of significant pairs across folds.
 ```{r eval = FALSE}
 crossValResults <- RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
-                   analyteType2miss = 0.80, stype="drugscore", outcome = c(1), 
-                   independent.var.type = c(2), pvalcutoff = 0.10, 
+                   analyteMiss = 0.80, stype="drugscore", outcome = c(2), 
+                   independent.var.type = c(1), pvalcutoff = 0.10, 
                    rsquaredCutoff = 0.2,
-                   folds = 5, continuous = TRUE)
+                   folds = 5, continuous = TRUE,
+                   interactionCoeffPercentile = 0.5)
 IntLIM::PlotFoldOverlapUpSet(crossValResults$processed)
 
 # Find all pairs.
@@ -183,43 +190,90 @@ for(fold in crossValResults$folds){
   print(table(pdata[excluded, "cancertype"]))
 }
 ```
+## Permutation
+Finally, we run 5 permutations of the data. To replicate the results of the paper, change
+the num.permutations from 5 to 100. For large datasets and high numbers of permutations,
+you may wish to run your code on a supercomputer. For very large datasets, you may wish to 
+create several batch jobs on a supercomputer, each of which calls __PermuteIntLIM()__ with 
+num.permutations = 1, and then concatenate the results after all jobs have completed. If you do 
+this, it is recommended to change the seed for each call.
+
+__PermuteIntLIM()__ returns R^2 values averaged over all pairs, the number of significant
+pairs per permutation, and the significant pairs per permutation. These can be further
+refined using __PermutationSummary()__, which computes: (1) the number of permutations in which
+each pair was found to be significant, and (2) the number of significant pairs, independent
+variable analytes, and outcome analytes per permutation. Furthermore, a violin plot can
+be generated by setting plot = TRUE. For the NCI-60 data set, there are 4 pairs that
+were significant in 4 out of 5 permutations. In addition, the number of metabolites
+and pairs that were significant in the original data was higher than the number in
+the permuted data.
+```{r}
+# Permute and print summary.
+perm.res <- IntLIM::PermuteIntLIM(data = inputDatafilt, stype = "drugscore", outcome = 2,
+                      independent.var.type = 1, pvalcutoff = 0.10, interactionCoeffPercentile = 0.5, 
+                   rsquaredCutoff = 0.2,
+                   num.permutations = 5, continuous = TRUE)
+perm.res <- readRDS("H:\\IntLIM2.0_paper\\perms.RDS")
+summary <- PermutationSummary(permResults = perm.res, inputResults = myres.sig,
+                              plot = TRUE)
+print(summary$SignificanceCountTable)
+print(summary$CountDistributions)
+
+# Further analyses reported in paper for comparison with original data
+print(sort(summary$CountDistributions$Pairs))
+print(sort(summary$CountDistributions$Independent))
+print(sort(summary$CountDistributions$Outcome))
+genes <- unlist(lapply(as.character(summary$SignificanceCountTable$allSignificantPairs), 
+                       function(pair){
+  return(strsplit(pair, "__V__")[[1]][1])
+}))
+metabolites <- unlist(lapply(as.character(summary$SignificanceCountTable$allSignificantPairs), 
+                       function(pair){
+  return(strsplit(pair, "__V__")[[1]][2])
+}))
+print(summary$SignificanceCountTable$allSignificantPairs[which(genes == "CHERP")])
+print(summary$SignificanceCountTable$allSignificantPairs[which(genes == "MGA")])
+print(summary$SignificanceCountTable$allSignificantPairs[which(genes == "CHD4")])
+```
 
 This chunk evaluates a subset of pairs using glm, illustrating the difference in running time
-between glm and IntLIM. In a typical case, running this chunk won't be necessary.
+between glm and IntLIM. This evaluation was conducted strictly for publication purposes and isn't
+something the typical user will need to run. Nevertheless, the code is included here for
+those who wish to replicate the results of the paper.
 ```{r}
-library(stats)
-library(rsq)
-
-# Subset data.
-inputDatafilt@analyteType1 <- inputDatafilt@analyteType1[1:10,]
-
-# Run IntLIM.
-myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
-                           independent.var.type = 1, outcome = 2)
-
-# Run GLM.
-starttime <- Sys.time()
-subdat <- NULL
-suppressMessages({pvals = lapply(rownames(inputDatafilt@analyteType2), function(m){
-  pvals_single = lapply(rownames(inputDatafilt@analyteType1), function(g){
-    subdat = data.frame(drugscore=inputDatafilt@sampleMetaData, 
-                        m=inputDatafilt@analyteType2[m,], 
-                        g=inputDatafilt@analyteType1[g,])
-    attach(subdat)
-    form_glm = "m ~ g + drugscore + g:drugscore"
-    myfit = glm(form_glm, data = subdat)
-    
-    pvals = coef(summary(myfit))[,4]
-    result = data.frame(rsq(myfit), pvals["g"], pvals["g:drugscore"], 
-                        pvals["drugscore"])
-    colnames(result) = c("Rsquared", "Pval_gene", "Pval_interaction", "Pval_drugscore")
-    rownames(result) = paste(m, g, sep = "_")
-    return(result)
-  })
-  result_metab = do.call("rbind", pvals_single)
-})})
-endtime <- Sys.time()
-print(endtime - starttime)
+# library(stats)
+# library(rsq)
+# 
+# # Subset data.
+# inputDatafilt@analyteType1 <- inputDatafilt@analyteType1[1:10,]
+# 
+# # Run IntLIM.
+# myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
+#                            independent.var.type = 1, outcome = 2)
+# 
+# # Run GLM.
+# starttime <- Sys.time()
+# subdat <- NULL
+# suppressMessages({pvals = lapply(rownames(inputDatafilt@analyteType2), function(m){
+#   pvals_single = lapply(rownames(inputDatafilt@analyteType1), function(g){
+#     subdat = data.frame(drugscore=inputDatafilt@sampleMetaData, 
+#                         m=inputDatafilt@analyteType2[m,], 
+#                         g=inputDatafilt@analyteType1[g,])
+#     attach(subdat)
+#     form_glm = "m ~ g + drugscore + g:drugscore"
+#     myfit = glm(form_glm, data = subdat)
+#     
+#     pvals = coef(summary(myfit))[,4]
+#     result = data.frame(rsq(myfit), pvals["g"], pvals["g:drugscore"], 
+#                         pvals["drugscore"])
+#     colnames(result) = c("Rsquared", "Pval_gene", "Pval_interaction", "Pval_drugscore")
+#     rownames(result) = paste(m, g, sep = "_")
+#     return(result)
+#   })
+#   result_metab = do.call("rbind", pvals_single)
+# })})
+# endtime <- Sys.time()
+# print(endtime - starttime)
 ```
 
 ### References
