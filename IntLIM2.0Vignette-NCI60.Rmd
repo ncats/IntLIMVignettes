@@ -214,11 +214,44 @@ perm.res <- IntLIM::PermuteIntLIM(data = inputDatafilt, stype = "drugscore", out
                    rsquaredCutoff = 0.2,
                    num.permutations = 5, continuous = TRUE)
 perm.res <- readRDS("H:\\IntLIM2.0_paper\\perms.RDS")
-summary <- PermutationSummary(permResults = perm.res, inputResults = myres.sig,
+summary <- IntLIM::PermutationSummary(permResults = perm.res, inputResults = myres.sig,
                               plot = TRUE)
 print(summary$SignificanceCountTable)
 print(summary$CountDistributions)
 
+# Compute the number of times each pair significant in the original data was
+# also significant in the permuted data.
+myres.sig.pairs <- paste(myres.sig$Analyte1, myres.sig$Analyte2, sep = "__V__")
+summary$SignificanceCountTable$allSignificantPairs <- 
+  as.character(summary$SignificanceCountTable$allSignificantPairs)
+original.pairs.count <- unlist(lapply(myres.sig.pairs, function(pair){
+  freq <- 0
+  if(pair %in% summary$SignificanceCountTable$allSignificantPairs){
+    freq <- summary$SignificanceCountTable$Freq[
+      which(summary$SignificanceCountTable$allSignificantPairs == pair)]
+  }
+  return(freq)
+}))
+original.pairs.df <- data.frame(Pair=myres.sig.pairs, 
+                                Perm.Count=original.pairs.count)
+ggplot(data=original.pairs.df, aes(x = reorder(Pair, Perm.Count), 
+                                   y = as.numeric(as.character(reorder(Perm.Count, Perm.Count)))))+
+  geom_bar(stat = "identity", width = 1) + 
+  coord_flip() + 
+  ggplot2::theme_bw() +
+  ggplot2::theme(axis.text.y=ggplot2::element_blank(),
+                     panel.border = ggplot2::element_blank(),
+                     panel.grid.major = ggplot2::element_blank(),
+                     panel.grid.minor = ggplot2::element_blank(),
+                     axis.line = ggplot2::element_line(colour = "black")) +
+  ggplot2::labs(x="Significant Pair (Original Data)",
+                y="Number of Permutations Where Significant") +
+  ggplot2::ylim(0,nrow(perm.res[[1]]))
+print(length(which(original.pairs.df$Perm.Count == 0)))
+print(length(which(original.pairs.df$Perm.Count < 10)))
+```
+
+```{r}
 # Further analyses reported in paper for comparison with original data
 print(sort(summary$CountDistributions$Pairs))
 print(sort(summary$CountDistributions$Independent))
