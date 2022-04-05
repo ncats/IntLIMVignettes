@@ -23,7 +23,7 @@ if(!require("devtools")){
   install.packages("devtools")
 }
 library("devtools")
-install_github("ncats/IntLIM@liz_dev")
+install_github("ncats/IntLIM")
 library(IntLIM)
 ```
 

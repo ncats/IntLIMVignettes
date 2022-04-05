@@ -2,16 +2,16 @@ metabnames,id,databaseId
 (p-Hydroxyphenyl)lactic acid,(p-Hydroxyphenyl)lactic acid,hmdb:HMDB0000755
 3-phospho-d-glycerate,3-phospho-d-glycerate,hmdb:HMDB0000807
 "5,6-Dimethylbenzimidazole","5,6-Dimethylbenzimidazole",hmdb:HMDB0003701
-5-oxoproline,5-oxoproline,"hmdb:	HMDB0000267"
+5-oxoproline,5-oxoproline,hmdb:HMDB0000267
 adenine,adenine,hmdb:HMDB0000034
 alanine,alanine,hmdb:HMDB0001310
 alpha-D-ribose 5-phosphate,alpha-D-ribose 5-phosphate,hmdb:HMDB0001548
-anthranilic acid,anthranilic acid,"hmdb:	HMDB0001123"
+anthranilic acid,anthranilic acid,hmdb:HMDB0001123
 arabinose,arabinose,hmdb:HMDB0029942
 arginine,arginine,hmdb:HMDB0000517
 asparagine,asparagine,hmdb:HMDB0251512
 aspartate,aspartate,hmdb:HMDB0000191
-beta-alanine,beta-alanine,"hmdb:	HMDB0000056"
+beta-alanine,beta-alanine,hmdb:HMDB0000056
 cholesterol,cholesterol,hmdb:HMDB0000067
 citric acid,citric acid,hmdb:HMDB0000094
 creatinine,creatinine,hmdb:HMDB0000562
@@ -20,20 +20,20 @@ D-allose,D-allose,hmdb:HMDB0001151
 DL-cystathionine,DL-cystathionine,hmdb:HMDB0303077
 D-ribose,D-ribose,hmdb:HMDB0000283
 fumaric acid,fumaric acid,hmdb:HMDB0000134
-glucose-6-phosphate,glucose-6-phosphate,"hmdb:	HMDB0001401"
+glucose-6-phosphate,glucose-6-phosphate,hmdb:HMDB0001401
 glutamic acid,glutamic acid,hmdb:HMDB0000148
 glutamine,glutamine,hmdb:HMDB0003423
-glyceraldehyde,glyceraldehyde,"hmdb:	HMDB0001051"
-glyceric acid,glyceric acid,"hmdb:	HMDB0000139"
-glycerol,glycerol,"hmdb:	HMDB0000131"
+glyceraldehyde,glyceraldehyde,hmdb:HMDB0001051
+glyceric acid,glyceric acid,hmdb:HMDB0000139
+glycerol,glycerol,hmdb:HMDB0000131
 glycine,glycine,hmdb:HMDB0000123
-"gulono-1,4-lactone","gulono-1,4-lactone",cas:2782-07-2
+"gulono-1,4-lactone","gulono-1,4-lactone",CAS:2782-07-2
 histidine,histidine,hmdb:HMDB0000177
 hypotaurine,hypotaurine,hmdb:HMDB0000965
 inositol 1-phosphate,inositol 1-phosphate,hmdb:HMDB0002985
 isoleucine,isoleucine,hmdb:HMDB0000172
 lactate,lactate,hmdb:HMDB0000190
-L-allo-threonine,L-allo-threonine,"hmdb:	HMDB0004041"
+L-allo-threonine,L-allo-threonine,hmdb:HMDB0004041
 L-arabitol,L-arabitol,hmdb:HMDB0001851
 leucine,leucine,hmdb:HMDB0000687
 malic acid,malic acid,hmdb:HMDB0000156
@@ -41,9 +41,9 @@ mannose,mannose,hmdb:HMDB0000169
 N(5)-(aminocarbonyl)-L-ornithine,N(5)-(aminocarbonyl)-L-ornithine,hmdb:HMDB0000904
 N-acetylneuraminic acid,N-acetylneuraminic acid,hmdb:HMDB0000230
 n-dodecanoate,n-dodecanoate,hmdb:HMDB0000638
-n-hexadecanoic acid,n-hexadecanoic acid,"hmdb:	HMDB0000220"
+n-hexadecanoic acid,n-hexadecanoic acid,hmdb:HMDB0000220
 octopamine,octopamine,hmdb:HMDB0004825
-ornithine,ornithine,"hmdb:	HMDB0000214"
+ornithine,ornithine,hmdb:HMDB0000214
 phosphate,phosphate,hmdb:HMDB0001429
 Possible Artifact-2336 (RI Ladder),Possible Artifact-2336 (RI Ladder),NA
 X-2911,X-2911,NA
@@ -79,46 +79,46 @@ X-4611,X-4611,NA
 proline,proline,hmdb:HMDB0003411
 Putrescine,Putrescine,hmdb:HMDB0001414
 serine,serine,hmdb:HMDB0000187
-sn-Glycerol 3-phosphate,sn-Glycerol 3-phosphate,cas:17989-41-2
+sn-Glycerol 3-phosphate,sn-Glycerol 3-phosphate,CAS:17989-41-2
 sorbitol,sorbitol,hmdb:HMDB0000247
 Spermidine,Spermidine,hmdb:HMDB0001257
 succinate,succinate,hmdb:HMDB0000254
 tetradecanoic acid,tetradecanoic acid,hmdb:HMDB0030469
 threonine,threonine,hmdb:HMDB0000167
 trans-4-hydroxyproline,trans-4-hydroxyproline,hmdb:HMDB0000725
-tyramine,tyramine,"hmdb:	HMDB0000306"
-tyrosine,tyrosine,"hmdb:	HMDB0000158"
-uracil,uracil,"hmdb:	HMDB0000300"
-urea,urea,"hmdb:	HMDB0000294"
-valine,valine,"hmdb:	HMDB0000883"
-xanthosine,xanthosine,"hmdb:	HMDB0000299"
-(2-Aminoethyl)phosphonate,(2-Aminoethyl)phosphonate,"hmdb:	HMDB0011747"
-"2,3-diphospho-D-glyceric acid","2,3-diphospho-D-glyceric acid","hmdb:	HMDB0001294"
-2'-deoxyadenosine 5'-diphosphate,2'-deoxyadenosine 5'-diphosphate,"hmdb:	HMDB0001508"
+tyramine,tyramine,hmdb:HMDB0000306
+tyrosine,tyrosine,hmdb:HMDB0000158
+uracil,uracil,hmdb:HMDB0000300
+urea,urea,hmdb:HMDB0000294
+valine,valine,hmdb:HMDB0000883
+xanthosine,xanthosine,hmdb:HMDB0000299
+(2-Aminoethyl)phosphonate,(2-Aminoethyl)phosphonate,hmdb:HMDB0011747
+"2,3-diphospho-D-glyceric acid","2,3-diphospho-D-glyceric acid",hmdb:HMDB0001294
+2'-deoxyadenosine 5'-diphosphate,2'-deoxyadenosine 5'-diphosphate,hmdb:HMDB0001508
 2'-deoxyuridine,2'-deoxyuridine,hmdb:HMDB0000012
 2'-deoxyuridine 5'-triphosphate,2'-deoxyuridine 5'-triphosphate,hmdb:HMDB0001191
-3-hydroxy-3-methylglutarate,3-hydroxy-3-methylglutarate,"hmdb:	HMDB0000355"
-3-phospho-l-serine,3-phospho-l-serine,"hmdb:	HMDB0304154"
-4-Guanidinobutanoic acid,4-Guanidinobutanoic acid,"hmdb:	HMDB0003464"
+3-hydroxy-3-methylglutarate,3-hydroxy-3-methylglutarate,hmdb:HMDB0000355
+3-phospho-l-serine,3-phospho-l-serine,hmdb:HMDB0304154
+4-Guanidinobutanoic acid,4-Guanidinobutanoic acid,hmdb:HMDB0003464
 "5,6-dihydrouracil","5,6-dihydrouracil",hmdb:HMDB0000076
-5'-s-methyl-5'-thioadenosine,5'-s-methyl-5'-thioadenosine,"hmdb:	HMDB0001173"
-allantoin,allantoin,"hmdb:	HMDB0000462"
+5'-s-methyl-5'-thioadenosine,5'-s-methyl-5'-thioadenosine,hmdb:HMDB0001173
+allantoin,allantoin,hmdb:HMDB0000462
 alpha-keto-glutarate,alpha-keto-glutarate,NA
-arginino-succinate,arginino-succinate,"hmdb:	HMDB0000052"
-beta-nicotinamide adenine dinucleotide,beta-nicotinamide adenine dinucleotide,"hmdb:	HMDB0249146"
-biotin,biotin,"hmdb:	HMDB0000030"
+arginino-succinate,arginino-succinate,hmdb:HMDB0000052
+beta-nicotinamide adenine dinucleotide,beta-nicotinamide adenine dinucleotide,hmdb:HMDB0249146
+biotin,biotin,hmdb:HMDB0000030
 caffeine,caffeine,hmdb:HMDB0001847
-cytidine,cytidine,"hmdb:	HMDB0000089"
+cytidine,cytidine,hmdb:HMDB0000089
 ethylmalonic acid,ethylmalonic acid,hmdb:HMDB0000622
 gamma-glu-cys,gamma-glu-cys,hmdb:HMDB0001049
-gamma-L-glutamyl-L-glutamine,gamma-L-glutamyl-L-glutamine,"hmdb:	HMDB0011738"
+gamma-L-glutamyl-L-glutamine,gamma-L-glutamyl-L-glutamine,hmdb:HMDB0011738
 "glutathione, reduced","glutathione, reduced",hmdb:HMDB0000125
 guanine,guanine,hmdb:HMDB0000132
 guanosine,guanosine,hmdb:HMDB0000133
 guanosine 5'- monophosphate,guanosine 5'- monophosphate,hmdb:HMDB0001397
-homogentisate,homogentisate,"hmdb:	HMDB0000130"
-hypoxanthine,hypoxanthine,"hmdb:	HMDB0000157"
-inosine,inosine,"hmdb:	HMDB0000195"
+homogentisate,homogentisate,hmdb:HMDB0000130
+hypoxanthine,hypoxanthine,hmdb:HMDB0000157
+inosine,inosine,hmdb:HMDB0000195
 "Isobar 13 includes 5-keto-D-gluconic acid, 2-keto-L-gulonic acid, D-glucuronic acid","Isobar 13 includes 5-keto-D-gluconic acid, 2-keto-L-gulonic acid, D-glucuronic acid",NA
 "Isobar 22 includes glutamic acid, O-acetyl-L-serine","Isobar 22 includes glutamic acid, O-acetyl-L-serine",NA
 "Isobar 27 includes L-kynurenine, alpha-2-diamino-gamma-oxobenzenebutanoic acid","Isobar 27 includes L-kynurenine, alpha-2-diamino-gamma-oxobenzenebutanoic acid",NA
@@ -126,18 +126,18 @@ inosine,inosine,"hmdb:	HMDB0000195"
 "Isobar 39 includes N-acetyl-D-glucosamine-6-phosphate, N-acetyl-alpha-D-glucosamine 1-phosphate","Isobar 39 includes N-acetyl-D-glucosamine-6-phosphate, N-acetyl-alpha-D-glucosamine 1-phosphate",NA
 "Isobar 4 includes Gluconic acid, DL-arabinose, D-ribose, L-xylose, DL-lyxose, D-xylulose","Isobar 4 includes Gluconic acid, DL-arabinose, D-ribose, L-xylose, DL-lyxose, D-xylulose",NA
 "Isobar 6 includes valine, betaine","Isobar 6 includes valine, betaine",NA
-Kynurenic acid,Kynurenic acid,"hmdb:	HMDB0000715"
+Kynurenic acid,Kynurenic acid,hmdb:HMDB0000715
 L-alpha-glycerophosphorylcholine,L-alpha-glycerophosphorylcholine,hmdb:HMDB0000086
-L-beta-imidazolelactic acid,L-beta-imidazolelactic acid,cas:14403-45-3
-methionine,methionine,"hmdb:	HMDB0000696"
+L-beta-imidazolelactic acid,L-beta-imidazolelactic acid,CAS:14403-45-3
+methionine,methionine,hmdb:HMDB0000696
 N-formyl-L-methionine,N-formyl-L-methionine,hmdb:HMDB0001015
 niacinamide,niacinamide,hmdb:HMDB0001406
 oxitryptan,oxitryptan,hmdb:HMDB0000472
 pantothenic acid,pantothenic acid,hmdb:HMDB0000210
 phenylalanine,phenylalanine,hmdb:HMDB0000159
 phosphoenolpyruvate,phosphoenolpyruvate,hmdb:HMDB0000263
-picolinic acid,picolinic acid,"hmdb:	HMDB0002243"
-porphobilinogen,porphobilinogen,"hmdb:	HMDB0000245"
+picolinic acid,picolinic acid,hmdb:HMDB0002243
+porphobilinogen,porphobilinogen,hmdb:HMDB0000245
 X-1086,X-1086,NA
 X-1104,X-1104,NA
 X-1107,X-1107,NA
@@ -269,13 +269,13 @@ X-4906,X-4906,NA
 X-5111,X-5111,NA
 X-5147,X-5147,NA
 X-5187,X-5187,NA
-pyridoxal,pyridoxal,"hmdb:	HMDB0001545"
+pyridoxal,pyridoxal,hmdb:HMDB0001545
 quinolinic acid,quinolinic acid,hmdb:HMDB0000232
 S-(5'-adenosyl)-L-methionine,S-(5'-adenosyl)-L-methionine,hmdb:HMDB0001185
 S-adenosyl-l-homocysteine,S-adenosyl-l-homocysteine,hmdb:HMDB0000939
-tartaric acid,tartaric acid,"hmdb:	HMDB0000956"
-taurine,taurine,"hmdb:	HMDB0000251"
+tartaric acid,tartaric acid,hmdb:HMDB0000956
+taurine,taurine,hmdb:HMDB0000251
 tryptophan,tryptophan,hmdb:HMDB0030396
 uridine,uridine,hmdb:HMDB0000296
 uridine diphosphate-N-acetylmuraminic acid,uridine diphosphate-N-acetylmuraminic acid,NA
-xanthine,xanthine,"hmdb:	HMDB0000292"
+xanthine,xanthine,hmdb:HMDB0000292
