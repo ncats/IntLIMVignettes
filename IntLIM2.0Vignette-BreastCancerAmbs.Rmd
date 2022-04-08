@@ -1,0 +1,203 @@
+---
+title: "Running the linear model on breast cancer study"
+author: "Tara Eicher and Jalal K. Siddiqui, PhD"
+date: "1/11/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+A previous study had conducted both gene expression and metabolomics profiling of tissue samples from breast cancer patients (1).  This vigenette will highlight the analysis we conduct on the breast cancer data.
+
+## Loading in IntLIM and Files
+
+IntLIM, available from Github, can be installed as in the documentation.  Once IntLIM is installed, what is necessary is loading in the library.  First clear the workspace.  
+
+```{r}
+rm(list = ls())
+if(!require("devtools")){
+  install.packages("devtools")
+}
+library("devtools")
+install_github("ncats/IntLIM")
+library(IntLIM)
+```
+
+For breast cancer study, both gene expression (available on Gene Expression Omnibus Accession Number:  GSE37751) and metabolomics(1)  (http://www.jci.org/articles/view/71180/sd/2) data are available online.   Much of this data had been processed as previously described (1).  Probes from the Affymetrix data not mapping to a gene symbol were removed.  Additionally, only the probe corresponding to the highest mean expression was used for analysis when multiple probes corresponded to a single gene. This resulted in a total of 20,254 genes for 108 patient samples.  The Metabolon data did not need to be filtered by coefficient of variation, as there were no technical replicates.  The resulting data consisted of 536 metabolites with 132 patient samples.    
+
+This data has been formatted for IntLIM.  We load in the data as follows.  The bc.ambs.csv meta file contains a list of phenotypic data file, metabolite data file, gene expression data file, metabolite meta file, and gene expression meta file. The function __ShowStats()__ will give a summary of the data. We find that we have gene expression data involving 20,254 genes and 536 metabolites with 108 patient samples.  
+
+```{r}
+csvfile <- file.path(getwd(), "/BRCA_data/input.csv")
+inputData <- IntLIM::ReadData(inputFile = csvfile,analyteType1id='id',analyteType2id='id',
+                              class.feat = list(DIAG = "factor"))
+IntLIM::ShowStats(inputData)
+```
+
+## Filtering Gene Expression and Metabolite Data
+
+The __FilterData()__ function is used to filter the data.  We remove genes with mean belows below the 10th percentile.  Furthermore, we remove analytes with more than 80% missing values.  This results in gene expression data involving 18,228 genes, 536 metabolites, and 108 patient samples.  
+
+```{r}
+inputDatafilt <- IntLIM::FilterData(inputData,analyteType1perc=0.10, analyteMiss = 0.80)
+IntLIM::ShowStats(inputDatafilt)
+```
+
+We can obtain boxplot distributions of the data as follows. This is used to make figures.  
+
+```{r}
+IntLIM::PlotDistributions(inputDatafilt)
+```
+
+## Principal Component Analysis
+
+The principal component analysis is performed on filtered metabolite and gene expression data to obtain visual representations showing how different sub-sections of the data could be grouped into different clusters.  Common samples patient samples (either tumor or adjacent non-tumor samples).  Blue samples indicate tumor samples and red samples indicate non-tumor samples.  Note the clear delineation of samples.  
+
+```{r}
+PlotPCA(inputDatafilt, stype = "DIAG")
+```
+
+## Running Linear Model
+
+The linear model is for integrating multi-omics data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels is different from one phenotype compared to another. We run a linear model on tumor (n = 61) and non-tumor samples (n = 47) that included 18,228 genes and 536 metabolites (total of 9,770,208 possible associations and hence models).  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (a_j:p) term, and __DistRSquared()__ allows us to obtain a distribution of R^2 values for the models. __InteractionCoefficientGraph()__ allows us to obtain an ordered plot of the (a_j:p) term coefficients.  We also show a volcano plot showing the relationship between interaction coefficients and unadjusted p-values using __pvalCoefVolcano()__.   
+
+```{r}
+myres <- IntLIM::RunIntLim(inputDatafilt, stype="DIAG", outcome = 2, independent.var.type = 1)
+IntLIM::DistPvalues(myres, adjusted = FALSE)
+IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
+                        pvalcutoff = 0.05)
+```
+
+The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (a_j:p) association coefficient.  We further may only interested in results where the interaction coefficient is in the top Xth percentile (e.g. 50th shown here) and where the model fit as measured by R^2 value is above a given cutoff (e.g. 0.2). This is done with the __ProcessResults()__ function.
+```{r}
+myres10 <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10,
+                                  interactionCoeffPercentile = 0.5,
+                                  rsquaredCutoff = 0.2)
+
+OutputResults(inputResults = myres10, filename = "bcresults10.csv")
+```
+
+We find that we obtain 18,641 pairs.  We try to lessen the number by setting a more stringent p-value cutoff of 0.05 as done below.  
+```{r}
+myres5 <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.05,
+                                 interactionCoeffPercentile = 0.5,
+                                 rsquaredCutoff = 0.2)
+
+OutputResults(inputResults = myres5, filename = "bcresults5.csv")
+```
+
+We can show some example plots of some of these pairs.  The first example is the CDK14 vs. adrenate (22:4n6).  
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "CDK14", 
+                 outcomeAnalyteOfInterest = "adrenate (22:4n6)",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+We do find that the pair 2-hydroxyglutarate and GPT2 is significant at FDR adjusted p-value of 0.05 and correlation difference of over 0.5.  
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "GPT2", 
+                 outcomeAnalyteOfInterest = "2-hydroxyglutarate",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+GPT2 and MYC are not linked as was in the Ambs paper.  
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "MYC", 
+                 outcomeAnalyteOfInterest = "2-hydroxyglutarate",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
+The list of unique genes and metabolites in these pairs can be used to conduct a pathway enrichment analysis.  
+
+## Cross-Validation
+
+We then run 5-fold cross-validation to determine the overlap of significant pairs across folds.
+We use the same p-value, interaction coefficient, and R^2 cutoffs.
+```{r eval = FALSE}
+crossValResults <- RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
+                   analyteMiss = 0.80, stype="DIAG", outcome = c(2), 
+                   independent.var.type = c(1), pvalcutoff = 0.05, 
+                   rsquaredCutoff = 0.2,
+                   folds = 5, interactionCoeffPercentile = 0.5)
+IntLIM::PlotFoldOverlapUpSet(crossValResults$processed)
+
+# Find all pairs.
+union_all <- unique(unlist(lapply(1:5, function(i){
+  return(rownames(crossValResults$processed[[i]]))
+})))
+str(union_all)
+
+# Find intersections.
+union_4 <- unique(unlist(lapply(1:5, function(i){
+  result <- lapply(sort(setdiff(1:5,i)), function(j){
+    return(rownames(crossValResults$processed[[j]]))
+  })
+  result_intersect <- Reduce(intersect, result)
+  return(result_intersect)
+})))
+str(union_4)
+
+# Find intersections.
+combs <- utils::combn(1:5,2)
+union_3 <- unique(unlist(lapply(1:ncol(combs), function(i){
+  result <- lapply(sort(setdiff(1:5,unlist(combs[,i]))), function(j){
+    return(rownames(crossValResults$processed[[j]]))
+  })
+  result_intersect <- Reduce(intersect, result)
+  return(result_intersect)
+})))
+str(setdiff(union_3, union_4))
+
+# Print samples excluded from each fold.
+pdata <- read.csv(file.path(getwd(), "/NCI60_data/pData.csv"), row.names = 1)
+rownames(pdata) <- make.names(rownames(pdata))
+table(pdata$cancertype)
+for(fold in crossValResults$folds){
+  excluded <- rownames(fold$training@sampleMetaData)
+  print(table(pdata[excluded, "cancertype"]))
+}
+```
+
+## Permutation
+
+Finally, we run 5 permutations of the data. For large datasets and high numbers of permutations,
+you may wish to run your code on a supercomputer. For very large datasets, you may wish to 
+create several batch jobs on a supercomputer, each of which calls __PermuteIntLIM()__ with 
+num.permutations = 1, and then concatenate the results after all jobs have completed. If you do 
+this, it is recommended to change the seed for each call.
+
+__PermuteIntLIM()__ returns R^2 values averaged over all pairs, the number of significant
+pairs per permutation, and the significant pairs per permutation. These can be further
+refined using __PermutationCountSummary()__, which computes the number of significant pairs, independent
+variable analytes, and outcome analytes per permutation. Furthermore, a violin plot can
+be generated by setting plot = TRUE. In addition, __PermutationPairSummary()__ computes
+the number of permutations in which each pair was found to be significant. This can
+also be visualized using a horizontal bar plot.
+```{r}
+perm.res <- IntLIM::PermuteIntLIM(data = inputDatafilt, stype = "DIAG", outcome = 2,
+                      independent.var.type = 1, pvalcutoff = 0.10, interactionCoeffPercentile = 0.5, 
+                   rsquaredCutoff = 0.2,
+                   num.permutations = 5)
+summaryCount <- IntLIM::PermutationCountSummary(permResults = perm.res, inputResults = myres10,
+                              plot = TRUE)
+print(summaryCount)
+
+# Compute the number of times each pair significant in the original data was
+# also significant in the permuted data.
+summaryPairs <- IntLIM::PermutationPairSummary(permResults = perm.res, inputResults = myres10,
+                              plot = TRUE)
+print(summaryPairs)
+```
+
+### Reference
+
+1. Terunuma A, Putluri N, Mishra1 P, Mathé EA, Dorsey TH, Yi M, Wallace TA, Issaq HJ, Zhou M, Killian JK, Stevenson HS, Karoly ED, Chan K, Samanta S, Prieto D, Hsu TY.T., Kurley SJ, Putluri V, Sonavane R, Edelman DC, Wulff J, Starks AM, Yang Y, Kittles RA, Yfantis HG, Lee DH, Ioffe OB, Schiff R, Stephens RM, Meltzer PS, Veenstra TD, Westbrook TF, Sreekumar A, and Stefan Ambs S. MYC-driven 2-hydroxyglutarate associates with poor prognosis in breast cancer. J Clin Invest. 2014 Jan 2;124(1):398-412.
+
+2.  Siddiqui JK, Baskin E, Liu M, Cantemir-Stone CZ, Zhang B, Bonneville R, McElroy JP, Coombes KR, Mathé EA. IntLIM: integration using linear models of metabolomics and gene expression data. BMC bioinformatics. 2018 Dec;19(1):81.

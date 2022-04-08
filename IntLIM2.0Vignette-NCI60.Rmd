@@ -11,7 +11,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 ## Introduction
 
-The NCI-60 cancer cell lines were developed as a drug screening tool focusing on a range of cancer types.  In this vignette, we compare drug scores of NCI-60 cancer cell lines(1, 2).
+The NCI-60 cancer cell lines were developed as a drug screening tool focusing on a range of cancer types.  In this vignette, we compare drug scores of NCI-60 cancer cell lines (1, 2).
 
 ## Loading in IntLIM and Files
 
@@ -32,7 +32,7 @@ library(rmarkdown)
 
 For the NCI-60 cell lines, metabolomics and gene expression data were downloadable from the DTP website (https://wiki.nci.nih.gov/display/ncidtpdata/molecular+target+data).  The Metabolon data consisting of 353 metabolites and 58 cell lines with 177 technical replicates total was filtered for metabolites that had a median coefficient of variation of below 0.3.  The coefficient value was arbitrarily selected to filter out technical replicates having high variability.  The resulting metabolite abundance data set of 280 metabolites was subsequently log2 transformed. Probes from the Chiron Affymetrix U133 were mapped to genes using the Ensembl database hgu133.plus.db.  Probes mapping to more than one gene were removed.  In cases where more than one probe was matching to a given gene, only the probe with the highest mean expression was used for analysis.  This resulted in a total of 17,987 genes.   
 
-This data has been formatted for IntLIM.  We load in the data as follows.  The nci60.csv meta file contains a list of phenotypic data file, metabolite data file, gene expression data file, metabolite meta file, and gene expression meta file. The function OutputStats will give a summary of the NCI-60 data
+This data has been formatted for IntLIM.  We load in the data as follows.  The nci60.csv meta file contains a list with the phenotypic data file, metabolite data file, gene expression data file, metabolite meta file, and gene expression meta file. The function __ShowStats()__ will give a summary of the NCI-60 data for all samples containing both gene expression and metabolite abundance. We find that we have gene expression data involving 17,987 genes and metabolite abundance data involving 280 metabolites with 57 cell lines.
 
 ```{r}
 csvfile <- file.path(getwd(), "/NCI60_data/nci60.csv")
@@ -40,8 +40,6 @@ inputData <- IntLIM::ReadData(inputFile = csvfile,analyteType1id='id',analyteTyp
                               class.feat = list(drugscore = "numeric"))
 IntLIM::ShowStats(inputData)
 ```
-
-From the OutputStats, we find that we have gene expression data involving 17,987 genes and metabolite abundance data involving 280 metabolites with 57 cell lines.  
 
 ## Filtering Gene Expression and Metabolite Data
 
@@ -67,7 +65,7 @@ PlotPCA(inputDatafilt, stype = "drugscore")
 
 ## Running Linear Model
 
-The linear model for integrating multi-omics and data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels differs by phenotype. We run a linear model that included 16,188 genes and 280 metabolites (total of 4,532,640 possible associations and hence models).  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (a_j:p) term.  We also show a volcano plot showing the relationship between interaction coefficients and FDR adjusted p-values using __pvalCoefVolcano()__.  
+The linear model for integrating multi-omics and data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels differs by phenotype. We run a linear model that included 16,188 genes and 280 metabolites (total of 4,532,640 possible associations and hence models).  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (a_j:p) term, and __DistRSquared()__ allows us to obtain a distribution of R^2 values for the models. __InteractionCoefficientGraph()__ allows us to obtain an ordered plot of the (a_j:p) term coefficients.  We also show a volcano plot showing the relationship between interaction coefficients and unadjusted p-values using __pvalCoefVolcano()__.  
 
 ```{r}
 myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
@@ -76,8 +74,6 @@ IntLIM::DistPvalues(myres, adjusted = FALSE)
 IntLIM::DistRSquared(myres)
 IntLIM::InteractionCoefficientGraph(inputResults = myres, 
                                     interactionCoeffPercentile = 0.9)
-```
-```{r}
 IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
                         pvalcutoff = 0.05)
 ```
@@ -86,8 +82,6 @@ The next step is to process the results of this model by filtering the results o
 ```{r}
 myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0.2,
                                     interactionCoeffPercentile = 0.5)
-str(unique(as.character(myres.sig$Analyte1)))
-str(unique(as.character(myres.sig$Analyte2)))
 OutputResults(inputResults = myres.sig, filename = "NCI60pairs.csv")
 ```
 
@@ -227,20 +221,17 @@ print(summaryPairs)
 
 ```{r}
 # Further analyses reported in paper for comparison with original data
-print(sort(summary$CountDistributions$Pairs))
-print(sort(summary$CountDistributions$Independent))
-print(sort(summary$CountDistributions$Outcome))
-genes <- unlist(lapply(as.character(summary$SignificanceCountTable$allSignificantPairs), 
+genes <- unlist(lapply(as.character(summaryPairs$Pair), 
                        function(pair){
   return(strsplit(pair, "__V__")[[1]][1])
 }))
-metabolites <- unlist(lapply(as.character(summary$SignificanceCountTable$allSignificantPairs), 
+metabolites <- unlist(lapply(as.character(summaryPairs$Pair), 
                        function(pair){
   return(strsplit(pair, "__V__")[[1]][2])
 }))
-print(summary$SignificanceCountTable$allSignificantPairs[which(genes == "CHERP")])
-print(summary$SignificanceCountTable$allSignificantPairs[which(genes == "MGA")])
-print(summary$SignificanceCountTable$allSignificantPairs[which(genes == "CHD4")])
+print(summaryPairs[which(genes == "CHERP"),])
+print(summaryPairs[which(genes == "MGA"),])
+print(summaryPairs[which(genes == "CHD4"),])
 ```
 
 This chunk evaluates a subset of pairs using glm, illustrating the difference in running time
