@@ -98,14 +98,14 @@ IntLIM::HistogramPairs(myres.sig, type = "independent")
 # Tabulate gene and metabolite counts.
 table.gene.count <- as.data.frame(table(as.character(myres.sig$Analyte1)))
 table.metab.count <- as.data.frame(table(as.character(myres.sig$Analyte2)))
-print(table.gene.count[order(-table.gene.count$Freq)[1:100],])
-print(table.metab.count[order(-table.metab.count$Freq)[1:100],])
+print(table.gene.count[order(-table.gene.count$Freq)[1:10],])
+print(table.metab.count[order(-table.metab.count$Freq)[1:10],])
 
 # Print gene associations with metabolites of interest.
-print(myres.sig[which(myres.sig$Analyte2 == "X2..deoxyuridine.5..triphosphate"),])
-print(myres.sig[which(myres.sig$Analyte2 == "inositol.1.phosphate"),])
-print(myres.sig[which(myres.sig$Analyte2 == "beta.nicotinamide.adenine.dinucleotide"),])
-print(myres.sig[which(myres.sig$Analyte2 == "cholesterol"),])
+str(myres.sig[which(myres.sig$Analyte2 == "X2..deoxyuridine.5..triphosphate"),])
+str(myres.sig[which(myres.sig$Analyte2 == "inositol.1.phosphate"),])
+str(myres.sig[which(myres.sig$Analyte2 == "beta.nicotinamide.adenine.dinucleotide"),])
+str(myres.sig[which(myres.sig$Analyte2 == "cholesterol"),])
 ```
 
 We can show some example plots of some of these pairs.  The first example is the CHERP vs. beta-nicotinamide adenine dinucleotide.
@@ -216,7 +216,7 @@ print(summaryCount)
 # also significant in the permuted data.
 summaryPairs <- IntLIM::PermutationPairSummary(permResults = perm.res, inputResults = myres.sig,
                               plot = TRUE)
-print(summaryPairs)
+str(summaryPairs)
 ```
 
 ```{r}

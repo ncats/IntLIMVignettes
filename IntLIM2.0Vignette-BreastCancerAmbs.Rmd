@@ -193,7 +193,7 @@ print(summaryCount)
 # also significant in the permuted data.
 summaryPairs <- IntLIM::PermutationPairSummary(permResults = perm.res, inputResults = myres10,
                               plot = TRUE)
-print(summaryPairs)
+str(summaryPairs)
 ```
 
 ### Reference
