@@ -29,7 +29,7 @@ library(IntLIM)
 
 For breast cancer study, both gene expression (available on Gene Expression Omnibus Accession Number:  GSE37751) and metabolomics(1)  (http://www.jci.org/articles/view/71180/sd/2) data are available online.   Much of this data had been processed as previously described (1).  Probes from the Affymetrix data not mapping to a gene symbol were removed.  Additionally, only the probe corresponding to the highest mean expression was used for analysis when multiple probes corresponded to a single gene. This resulted in a total of 20,254 genes for 108 patient samples.  The Metabolon data did not need to be filtered by coefficient of variation, as there were no technical replicates.  The resulting data consisted of 536 metabolites with 132 patient samples.    
 
-This data has been formatted for IntLIM.  We load in the data as follows.  The bc.ambs.csv meta file contains a list of phenotypic data file, metabolite data file, gene expression data file, metabolite meta file, and gene expression meta file. The function __ShowStats()__ will give a summary of the data. We find that we have gene expression data involving 20,254 genes and 536 metabolites with 108 patient samples.  
+This data has been formatted for IntLIM.  We load in the data as follows.  The function __ShowStats()__ will give a summary of the data. We find that we have gene expression data involving 20,254 genes and 536 metabolites with 108 patient samples.  
 
 ```{r}
 csvfile <- file.path(getwd(), "/BRCA_data/input.csv")
@@ -58,7 +58,7 @@ IntLIM::PlotDistributions(inputDatafilt)
 The principal component analysis is performed on filtered metabolite and gene expression data to obtain visual representations showing how different sub-sections of the data could be grouped into different clusters.  Common samples patient samples (either tumor or adjacent non-tumor samples).  Blue samples indicate tumor samples and red samples indicate non-tumor samples.  Note the clear delineation of samples.  
 
 ```{r}
-PlotPCA(inputDatafilt, stype = "DIAG")
+IntLIM::PlotPCA(inputDatafilt, stype = "DIAG")
 ```
 
 ## Running Linear Model
@@ -78,27 +78,27 @@ myres10 <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10,
                                   interactionCoeffPercentile = 0.5,
                                   rsquaredCutoff = 0.2)
 
-OutputResults(inputResults = myres10, filename = "bcresults10.csv")
+IntLIM::OutputResults(inputResults = myres10, filename = "bcresults10.csv")
 ```
 
-We find that we obtain 18,641 pairs.  We try to lessen the number by setting a more stringent p-value cutoff of 0.05 as done below.  
-```{r}
-myres5 <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.05,
-                                 interactionCoeffPercentile = 0.5,
-                                 rsquaredCutoff = 0.2)
+We find that we obtain 18,641 pairs.
 
-OutputResults(inputResults = myres5, filename = "bcresults5.csv")
+We can show some example plots of some of these pairs.  The first example is the ASNS vs. glutamine.  
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "ASNS", 
+                 outcomeAnalyteOfInterest = "glutamine",
+                 independentVariable = 1,
+                 outcome = 2)
 ```
-
-We can show some example plots of some of these pairs.  The first example is the CDK14 vs. adrenate (22:4n6).  
+The second example is the SLC7A1 vs. glutamine.  
 ```{r}
-IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "CDK14", 
-                 outcomeAnalyteOfInterest = "adrenate (22:4n6)",
+IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "SLC7A1", 
+                 outcomeAnalyteOfInterest = "glutamine",
                  independentVariable = 1,
                  outcome = 2)
 ```
 
-We do find that the pair 2-hydroxyglutarate and GPT2 is significant at FDR adjusted p-value of 0.05 and correlation difference of over 0.5.  
+We also find that the pair 2-hydroxyglutarate and GPT2 is significant.  
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "GPT2", 
                  outcomeAnalyteOfInterest = "2-hydroxyglutarate",
@@ -121,9 +121,9 @@ The list of unique genes and metabolites in these pairs can be used to conduct a
 We then run 5-fold cross-validation to determine the overlap of significant pairs across folds.
 We use the same p-value, interaction coefficient, and R^2 cutoffs.
 ```{r eval = FALSE}
-crossValResults <- RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
+crossValResults <- IntLIM::RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
                    analyteMiss = 0.80, stype="DIAG", outcome = c(2), 
-                   independent.var.type = c(1), pvalcutoff = 0.05, 
+                   independent.var.type = c(1), pvalcutoff = 0.10, 
                    rsquaredCutoff = 0.2,
                    folds = 5, interactionCoeffPercentile = 0.5)
 IntLIM::PlotFoldOverlapUpSet(crossValResults$processed)
@@ -156,13 +156,13 @@ union_3 <- unique(unlist(lapply(1:ncol(combs), function(i){
 str(setdiff(union_3, union_4))
 
 # Print samples excluded from each fold.
-pdata <- read.csv(file.path(getwd(), "/NCI60_data/pData.csv"), row.names = 1)
-rownames(pdata) <- make.names(rownames(pdata))
-table(pdata$cancertype)
-for(fold in crossValResults$folds){
-  excluded <- rownames(fold$training@sampleMetaData)
-  print(table(pdata[excluded, "cancertype"]))
-}
+# pdata <- read.csv(file.path(getwd(), "/BRCA_data/pData.csv"), row.names = 1)
+# rownames(pdata) <- make.names(rownames(pdata))
+# table(pdata$cancertype)
+# for(fold in crossValResults$folds){
+#   excluded <- rownames(fold$training@sampleMetaData)
+#   print(table(pdata[excluded, "cancertype"]))
+# }
 ```
 
 ## Permutation
@@ -194,6 +194,21 @@ print(summaryCount)
 summaryPairs <- IntLIM::PermutationPairSummary(permResults = perm.res, inputResults = myres10,
                               plot = TRUE)
 str(summaryPairs)
+```
+
+```{r}
+# Further analyses reported in paper for comparison with original data
+genes <- unlist(lapply(as.character(summaryPairs$Pair), 
+                       function(pair){
+  return(strsplit(pair, "__V__")[[1]][1])
+}))
+metabolites <- unlist(lapply(as.character(summaryPairs$Pair), 
+                       function(pair){
+  return(strsplit(pair, "__V__")[[1]][2])
+}))
+print(summaryPairs[which(genes == "ASNS"),])
+print(summaryPairs[which(genes == "SLC7A1"),])
+print(summaryPairs[which(genes == "GPT2"),])
 ```
 
 ### Reference
