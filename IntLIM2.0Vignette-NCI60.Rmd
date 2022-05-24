@@ -80,8 +80,10 @@ IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
 
 The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (a_j:p) association coefficient. We further may only interested in results where the interaction coefficient is in the top Xth percentile (e.g. 50th shown here) and where the model fit as measured by R^2 value is above a given cutoff (e.g. 0.2). This is done with the __ProcessResults()__ function.
 ```{r}
-myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0.2,
+myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0,
                                     interactionCoeffPercentile = 0.5)
+myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0,
+                                    interactionCoeffPercentile = 0)
 OutputResults(inputResults = myres.sig, filename = "NCI60pairs.csv")
 ```
 
@@ -108,81 +110,49 @@ str(myres.sig[which(myres.sig$Analyte2 == "beta.nicotinamide.adenine.dinucleotid
 str(myres.sig[which(myres.sig$Analyte2 == "cholesterol"),])
 ```
 
-We can show some example plots of some of these pairs.  The first example is the CHERP vs. beta-nicotinamide adenine dinucleotide.
+We can show some example plots of some of these pairs.  The first example is the HHAT vs. cholesterol.
 
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, 
-                 independentAnalyteOfInterest = "CHERP", 
-                 outcomeAnalyteOfInterest = "beta-nicotinamide adenine dinucleotide",
-                 independentVariable = 1,
-                 outcome = 2)
-```
-
-Another example is MGA vs. inositol-1-phosphate.  
-
-```{r}
-IntLIM::PlotPair(inputDatafilt, myres, 
-                 independentAnalyteOfInterest = "MGA", 
-                 outcomeAnalyteOfInterest = "inositol-1-phosphate",
-                 independentVariable = 1,
-                 outcome = 2)
-```
-
-Another example is CHD4 vs. cholesterol.
-
-```{r}
-IntLIM::PlotPair(inputDatafilt, myres, 
-                 independentAnalyteOfInterest = "CHD4", 
+                 independentAnalyteOfInterest = "HHAT", 
                  outcomeAnalyteOfInterest = "cholesterol",
                  independentVariable = 1,
                  outcome = 2)
 ```
+
+Another example is CDKN1A vs. cholesterol.
+
+```{r}
+IntLIM::PlotPair(inputDatafilt, myres, 
+                 independentAnalyteOfInterest = "CDKN1A", 
+                 outcomeAnalyteOfInterest = "cholesterol",
+                 independentVariable = 1,
+                 outcome = 2)
+```
+
 ## Cross-Validation
-We then run 5-fold cross-validation to determine the overlap of significant pairs across folds.
-```{r eval = FALSE}
+We then run 5-fold cross-validation to determine the overlap of significant pairs across folds. To replicate leave-one-out cross-validation as shown in the paper, change __folds__ from 5 to 57.
+```{r results = FALSE}
+folds <- 5
 crossValResults <- RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
                    analyteMiss = 0.80, stype="drugscore", outcome = c(2), 
                    independent.var.type = c(1), pvalcutoff = 0.10, 
                    rsquaredCutoff = 0.2,
-                   folds = 5, continuous = TRUE,
+                   folds = folds, continuous = TRUE,
                    interactionCoeffPercentile = 0.5)
 IntLIM::PlotFoldOverlapUpSet(crossValResults$processed)
 
-# Find all pairs.
-union_all <- unique(unlist(lapply(1:5, function(i){
-  return(rownames(crossValResults$processed[[i]]))
-})))
-str(union_all)
+# Find number of pairs overlapping in at least half of the folds.
+result <- lapply(1:folds, function(j){return(rownames(crossValResults$processed[[j]]))})
+result_flat <- unlist(result)
+fold_count <- table(result_flat)
+length(which(fold_count > folds / 2))
 
-# Find intersections.
-union_4 <- unique(unlist(lapply(1:5, function(i){
-  result <- lapply(sort(setdiff(1:5,i)), function(j){
-    return(rownames(crossValResults$processed[[j]]))
-  })
-  result_intersect <- Reduce(intersect, result)
-  return(result_intersect)
-})))
-str(union_4)
-
-# Find intersections.
-combs <- utils::combn(1:5,2)
-union_3 <- unique(unlist(lapply(1:ncol(combs), function(i){
-  result <- lapply(sort(setdiff(1:5,unlist(combs[,i]))), function(j){
-    return(rownames(crossValResults$processed[[j]]))
-  })
-  result_intersect <- Reduce(intersect, result)
-  return(result_intersect)
-})))
-str(setdiff(union_3, union_4))
-
-# Print samples excluded from each fold.
-pdata <- read.csv(file.path(getwd(), "/NCI60_data/pData.csv"), row.names = 1)
-rownames(pdata) <- make.names(rownames(pdata))
-table(pdata$cancertype)
-for(fold in crossValResults$folds){
-  excluded <- rownames(fold$training@sampleMetaData)
-  print(table(pdata[excluded, "cancertype"]))
-}
+# Find number of pairs from original data that overlap the cross-validation data.
+resultPairs <- paste(myres.sig$Analyte1, myres.sig$Analyte2, sep = "__")
+foldCountResults<- fold_count[which(names(fold_count) %in% resultPairs)]
+str(foldCountResults)
+length(which(foldCountResults > folds / 2))
 ```
 ## Permutation
 Finally, we run 5 permutations of the data. To replicate the results of the paper, change
@@ -202,7 +172,7 @@ also be visualized using a horizontal bar plot. For the NCI-60 data set, there a
 were significant in 4 out of 5 permutations. In addition, the number of metabolites
 and pairs that were significant in the original data was higher than the number in
 the permuted data.
-```{r}
+```{r results = FALSE}
 # Permute and print summary.
 perm.res <- IntLIM::PermuteIntLIM(data = inputDatafilt, stype = "drugscore", outcome = 2,
                      independent.var.type = 1, pvalcutoff = 0.10, interactionCoeffPercentile = 0.5,
@@ -219,59 +189,110 @@ summaryPairs <- IntLIM::PermutationPairSummary(permResults = perm.res, inputResu
 str(summaryPairs)
 ```
 
+The list of unique genes and metabolites in these pairs can be used to conduct a pathway enrichment analysis. Using RaMP, we query the set of pairs for shared pathways and shared reactions.
+```{r results = FALSE}
+if(!require("RaMP")){
+ install_github("ncats/RAMP-DB")
+}
+library(RaMP)
+
+# Load files.
+fdata <- inputDatafilt@analyteType2MetaData
+
+# Match metabolite ID's to source.
+metabid <- fdata[myres.sig$Analyte2, "databaseId"]
+
+# Match gene ID's to source.
+geneid <- paste0("gene_symbol:", myres.sig$Analyte1)
+
+# Connect to RaMP. Replace with your MySQL password, or "" if not using a password.
+password <- unlist(unname(read.csv(file.path("~/mysql_pw.txt"), header = FALSE)))
+pkg.globals <- setConnectionToRaMP(dbname = "ramp", username = "root", conpass = password,
+  host = "localhost")
+
+# Find which pairs share pathways.
+sharesPathway <- lapply(1:nrow(myres.sig), function(i){
+  shares <- FALSE
+  pwayResult <- getPathwayFromAnalyte(c(metabid[[i]], geneid[[i]]))
+  pwayResultMetab <- pwayResult$pathwayId[which(pwayResult$inputId == metabid[[i]])]
+  pwayResultGene <- pwayResult$pathwayId[which(pwayResult$inputId == geneid[[i]])]
+  if(length(intersect(pwayResultMetab, pwayResultGene)) > 0){
+    shares <- TRUE
+  }
+  return(shares)
+})
+
+# Find which pairs share reactions.
+sharesRxn <- lapply(1:nrow(myres.sig), function(i){
+  shares <- FALSE
+  tryCatch({
+    rxnResult <- rampFastCata(metabid[[i]])$rxn_partner_ids
+    rxnResultAll <- unlist(lapply(rxnResult, function(res){
+      return(strsplit(res, "; ")[[1]])
+    }))
+    if(geneid[[i]] %in% rxnResultAll){
+      shares <- TRUE
+    }
+  }, error = function(cond){})
+  return(shares)
+})
+
+```
+
 ```{r}
 # Further analyses reported in paper for comparison with original data
-genes <- unlist(lapply(as.character(summaryPairs$Pair), 
-                       function(pair){
-  return(strsplit(pair, "__V__")[[1]][1])
-}))
-metabolites <- unlist(lapply(as.character(summaryPairs$Pair), 
-                       function(pair){
-  return(strsplit(pair, "__V__")[[1]][2])
-}))
-print(summaryPairs[which(genes == "CHERP"),])
-print(summaryPairs[which(genes == "MGA"),])
-print(summaryPairs[which(genes == "CHD4"),])
+print(summaryPairs[which(summaryPairs$Pair == "HHAT__V__cholesterol"),])
+print(summaryPairs[which(summaryPairs$Pair == "CDKN1A__V__cholesterol"),])
+
+# Compare to pairs that share pathways.
+pathwayPairs <- paste(myres.sig[which(sharesPathway == TRUE), "Analyte1"], 
+                        myres.sig[which(sharesPathway == TRUE), "Analyte2"], sep = "__V__")
+length(which(summaryPairs[which(summaryPairs$Pair %in% pathwayPairs), "Perm.Count"] == 0))
+
+# Compare to pairs that share reactions.
+rxnPairs <- paste(myres.sig[which(sharesRxn == TRUE), "Analyte1"], 
+                        myres.sig[which(sharesRxn == TRUE), "Analyte2"], sep = "__V__")
+length(which(summaryPairs[which(summaryPairs$Pair %in% rxnPairs), "Perm.Count"] == 0))
 ```
 
 This chunk evaluates a subset of pairs using glm, illustrating the difference in running time
 between glm and IntLIM. This evaluation was conducted strictly for publication purposes and isn't
 something the typical user will need to run. Nevertheless, the code is included here for
 those who wish to replicate the results of the paper.
-```{r}
-# library(stats)
-# library(rsq)
-# 
-# # Subset data.
-# inputDatafilt@analyteType1 <- inputDatafilt@analyteType1[1:10,]
-# 
-# # Run IntLIM.
-# myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
-#                            independent.var.type = 1, outcome = 2)
-# 
-# # Run GLM.
-# starttime <- Sys.time()
-# subdat <- NULL
-# suppressMessages({pvals = lapply(rownames(inputDatafilt@analyteType2), function(m){
-#   pvals_single = lapply(rownames(inputDatafilt@analyteType1), function(g){
-#     subdat = data.frame(drugscore=inputDatafilt@sampleMetaData, 
-#                         m=inputDatafilt@analyteType2[m,], 
-#                         g=inputDatafilt@analyteType1[g,])
-#     attach(subdat)
-#     form_glm = "m ~ g + drugscore + g:drugscore"
-#     myfit = glm(form_glm, data = subdat)
-#     
-#     pvals = coef(summary(myfit))[,4]
-#     result = data.frame(rsq(myfit), pvals["g"], pvals["g:drugscore"], 
-#                         pvals["drugscore"])
-#     colnames(result) = c("Rsquared", "Pval_gene", "Pval_interaction", "Pval_drugscore")
-#     rownames(result) = paste(m, g, sep = "_")
-#     return(result)
-#   })
-#   result_metab = do.call("rbind", pvals_single)
-# })})
-# endtime <- Sys.time()
-# print(endtime - starttime)
+```{r eval = FALSE}
+library(stats)
+library(rsq)
+
+# Subset data.
+inputDatafilt@analyteType1 <- inputDatafilt@analyteType1[1:10,]
+
+# Run IntLIM.
+myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
+                           independent.var.type = 1, outcome = 2)
+
+# Run GLM.
+starttime <- Sys.time()
+subdat <- NULL
+suppressMessages({pvals = lapply(rownames(inputDatafilt@analyteType2), function(m){
+  pvals_single = lapply(rownames(inputDatafilt@analyteType1), function(g){
+    subdat = data.frame(drugscore=inputDatafilt@sampleMetaData,
+                        m=inputDatafilt@analyteType2[m,],
+                        g=inputDatafilt@analyteType1[g,])
+    attach(subdat)
+    form_glm = "m ~ g + drugscore + g:drugscore"
+    myfit = glm(form_glm, data = subdat)
+
+    pvals = coef(summary(myfit))[,4]
+    result = data.frame(rsq(myfit), pvals["g"], pvals["g:drugscore"],
+                        pvals["drugscore"])
+    colnames(result) = c("Rsquared", "Pval_gene", "Pval_interaction", "Pval_drugscore")
+    rownames(result) = paste(m, g, sep = "_")
+    return(result)
+  })
+  result_metab = do.call("rbind", pvals_single)
+})})
+endtime <- Sys.time()
+print(endtime - starttime)
 ```
 
 ### References

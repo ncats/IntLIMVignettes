@@ -34,13 +34,15 @@ This data has been formatted for IntLIM.  We load in the data as follows.  The f
 ```{r}
 csvfile <- file.path(getwd(), "/BRCA_data/input.csv")
 inputData <- IntLIM::ReadData(inputFile = csvfile,analyteType1id='id',analyteType2id='id',
-                              class.feat = list(DIAG = "factor"))
+                              class.feat = list(DIAG = "factor", 
+                                                RACE.ETHNICITY = "factor",
+                                                AGE = "numeric"))
 IntLIM::ShowStats(inputData)
 ```
 
 ## Filtering Gene Expression and Metabolite Data
 
-The __FilterData()__ function is used to filter the data.  We remove genes with mean belows below the 10th percentile.  Furthermore, we remove analytes with more than 80% missing values.  This results in gene expression data involving 18,228 genes, 536 metabolites, and 108 patient samples.  
+The __FilterData()__ function is used to filter the data.  We remove genes with mean below the 10th percentile.  Furthermore, we remove analytes with more than 80% missing values.  This results in gene expression data involving 18,228 genes, 536 metabolites, and 108 patient samples.  
 
 ```{r}
 inputDatafilt <- IntLIM::FilterData(inputData,analyteType1perc=0.10, analyteMiss = 0.80)
@@ -66,7 +68,8 @@ IntLIM::PlotPCA(inputDatafilt, stype = "DIAG")
 The linear model is for integrating multi-omics data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels is different from one phenotype compared to another. We run a linear model on tumor (n = 61) and non-tumor samples (n = 47) that included 18,228 genes and 536 metabolites (total of 9,770,208 possible associations and hence models).  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (a_j:p) term, and __DistRSquared()__ allows us to obtain a distribution of R^2 values for the models. __InteractionCoefficientGraph()__ allows us to obtain an ordered plot of the (a_j:p) term coefficients.  We also show a volcano plot showing the relationship between interaction coefficients and unadjusted p-values using __pvalCoefVolcano()__.   
 
 ```{r}
-myres <- IntLIM::RunIntLim(inputDatafilt, stype="DIAG", outcome = 2, independent.var.type = 1)
+myres <- IntLIM::RunIntLim(inputDatafilt, stype="DIAG", covar = c("AGE", "RACE.ETHNICITY"), outcome = 2, independent.var.type = 1, suppressWarnings = TRUE,
+                           save.covar.pvals = TRUE)
 IntLIM::DistPvalues(myres, adjusted = FALSE)
 IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
                         pvalcutoff = 0.05)
@@ -78,7 +81,7 @@ myres10 <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10,
                                   interactionCoeffPercentile = 0.5,
                                   rsquaredCutoff = 0.2)
 
-IntLIM::OutputResults(inputResults = myres10, filename = "bcresults10.csv")
+IntLIM::OutputResults(inputResults = myres10, filename = "bcresults10_race_age.csv")
 ```
 
 We find that we obtain 18,641 pairs.
@@ -106,7 +109,7 @@ IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "GPT2",
                  outcome = 2)
 ```
 
-GPT2 and MYC are not linked as was in the Ambs paper.  
+2-hydroxyglutarate and MYC are not linked as was in the Ambs paper.  
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "MYC", 
                  outcomeAnalyteOfInterest = "2-hydroxyglutarate",
@@ -114,55 +117,83 @@ IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "MYC",
                  outcome = 2)
 ```
 
-The list of unique genes and metabolites in these pairs can be used to conduct a pathway enrichment analysis.  
+The list of unique genes and metabolites in these pairs can be used to conduct a pathway enrichment analysis. Using RaMP, we query the set of pairs for shared pathways and shared reactions.
+Before running these commands, it is assumed that you have installed the RaMP database locally. Instructions to install RaMP are here: https://github.com/ncats/RaMP-DB
+```{r, results = FALSE}
+if(!require("RaMP")){
+ install_github("ncats/RAMP-DB")
+}
+library(RaMP)
+
+# Load files.
+fdata <- inputDatafilt@analyteType2MetaData
+
+# Match metabolite ID's to source.
+metabid <- lapply(myres10$Analyte2, function(analyte){
+  return(paste(fdata[analyte, "IDtype"], fdata[analyte, "sourceID"], sep = ":"))
+})
+
+# Match gene ID's to source.
+geneid <- paste0("gene_symbol:", myres10$Analyte1)
+
+# Connect to RaMP. Replace with your MySQL password, or "" if not using a password.
+password <- unlist(unname(read.csv(file.path("~/mysql_pw.txt"), header = FALSE)))
+pkg.globals <- setConnectionToRaMP(dbname = "ramp", username = "root", conpass = password,
+  host = "localhost")
+
+# Find which pairs share pathways.
+sharesPathway <- lapply(1:nrow(myres10), function(i){
+  shares <- FALSE
+  pwayResult <- getPathwayFromAnalyte(c(metabid[[i]], geneid[[i]]))
+  pwayResultMetab <- pwayResult$pathwayId[which(pwayResult$inputId == metabid[[i]])]
+  pwayResultGene <- pwayResult$pathwayId[which(pwayResult$inputId == geneid[[i]])]
+  if(length(intersect(pwayResultMetab, pwayResultGene)) > 0){
+    shares <- TRUE
+  }
+  return(shares)
+})
+
+# Find which pairs share reactions.
+sharesRxn <- lapply(1:nrow(myres10), function(i){
+  shares <- FALSE
+  tryCatch({
+    rxnResult <- rampFastCata(metabid[[i]])$rxn_partner_ids
+    rxnResultAll <- unlist(lapply(rxnResult, function(res){
+      return(strsplit(res, "; ")[[1]])
+    }))
+    if(geneid[[i]] %in% rxnResultAll){
+      shares <- TRUE
+    }
+  }, error = function(cond){})
+  return(shares)
+})
+```
 
 ## Cross-Validation
 
 We then run 5-fold cross-validation to determine the overlap of significant pairs across folds.
-We use the same p-value, interaction coefficient, and R^2 cutoffs.
-```{r eval = FALSE}
+We use the same p-value, interaction coefficient, and R^2 cutoffs. To replicate leave-one-out cross-validation as shown in the paper, change __folds__ from 5 to 108.
+```{r results = FALSE}
+folds <- 5
 crossValResults <- IntLIM::RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
                    analyteMiss = 0.80, stype="DIAG", outcome = c(2), 
                    independent.var.type = c(1), pvalcutoff = 0.10, 
                    rsquaredCutoff = 0.2,
-                   folds = 5, interactionCoeffPercentile = 0.5)
+                   folds = 5, interactionCoeffPercentile = 0.5,
+                   covar = c("AGE", "RACE.ETHNICITY"))
 IntLIM::PlotFoldOverlapUpSet(crossValResults$processed)
 
-# Find all pairs.
-union_all <- unique(unlist(lapply(1:5, function(i){
-  return(rownames(crossValResults$processed[[i]]))
-})))
-str(union_all)
+# Find number of pairs overlapping in at least half of the folds.
+result <- lapply(1:folds, function(j){return(rownames(crossValResults$processed[[j]]))})
+result_flat <- unlist(result)
+fold_count <- table(result_flat)
+length(which(fold_count > folds / 2))
 
-# Find intersections.
-union_4 <- unique(unlist(lapply(1:5, function(i){
-  result <- lapply(sort(setdiff(1:5,i)), function(j){
-    return(rownames(crossValResults$processed[[j]]))
-  })
-  result_intersect <- Reduce(intersect, result)
-  return(result_intersect)
-})))
-str(union_4)
-
-# Find intersections.
-combs <- utils::combn(1:5,2)
-union_3 <- unique(unlist(lapply(1:ncol(combs), function(i){
-  result <- lapply(sort(setdiff(1:5,unlist(combs[,i]))), function(j){
-    return(rownames(crossValResults$processed[[j]]))
-  })
-  result_intersect <- Reduce(intersect, result)
-  return(result_intersect)
-})))
-str(setdiff(union_3, union_4))
-
-# Print samples excluded from each fold.
-# pdata <- read.csv(file.path(getwd(), "/BRCA_data/pData.csv"), row.names = 1)
-# rownames(pdata) <- make.names(rownames(pdata))
-# table(pdata$cancertype)
-# for(fold in crossValResults$folds){
-#   excluded <- rownames(fold$training@sampleMetaData)
-#   print(table(pdata[excluded, "cancertype"]))
-# }
+# Find number of pairs from original data that overlap the cross-validation data.
+resultPairs <- paste(myres10$Analyte1, myres10$Analyte2, sep = "__")
+foldCountResults<- fold_count[which(names(fold_count) %in% resultPairs)]
+str(foldCountResults)
+length(which(foldCountResults > folds / 2))
 ```
 
 ## Permutation
@@ -180,11 +211,12 @@ variable analytes, and outcome analytes per permutation. Furthermore, a violin p
 be generated by setting plot = TRUE. In addition, __PermutationPairSummary()__ computes
 the number of permutations in which each pair was found to be significant. This can
 also be visualized using a horizontal bar plot.
-```{r}
+```{r results = FALSE}
 perm.res <- IntLIM::PermuteIntLIM(data = inputDatafilt, stype = "DIAG", outcome = 2,
                       independent.var.type = 1, pvalcutoff = 0.10, interactionCoeffPercentile = 0.5, 
                    rsquaredCutoff = 0.2,
-                   num.permutations = 5)
+                   num.permutations = 5,
+                   covar = c("AGE", "RACE.ETHNICITY"))
 summaryCount <- IntLIM::PermutationCountSummary(permResults = perm.res, inputResults = myres10,
                               plot = TRUE)
 print(summaryCount)
@@ -198,17 +230,19 @@ str(summaryPairs)
 
 ```{r}
 # Further analyses reported in paper for comparison with original data
-genes <- unlist(lapply(as.character(summaryPairs$Pair), 
-                       function(pair){
-  return(strsplit(pair, "__V__")[[1]][1])
-}))
-metabolites <- unlist(lapply(as.character(summaryPairs$Pair), 
-                       function(pair){
-  return(strsplit(pair, "__V__")[[1]][2])
-}))
-print(summaryPairs[which(genes == "ASNS"),])
-print(summaryPairs[which(genes == "SLC7A1"),])
-print(summaryPairs[which(genes == "GPT2"),])
+print(summaryPairs[which(summaryPairs$Pair == "ASNS__V__glutamine"),])
+print(summaryPairs[which(summaryPairs$Pair == "SLC7A1__V__glutamine"),])
+print(summaryPairs[which(summaryPairs$Pair == "GPT2__V__X2.hydroxyglutarate"),])
+
+# Compare to pairs that share pathways.
+pathwayPairs <- paste(myres10[which(sharesPathway == TRUE), "Analyte1"], 
+                        myres10[which(sharesPathway == TRUE), "Analyte2"], sep = "__V__")
+length(which(summaryPairs[which(summaryPairs$Pair %in% pathwayPairs), "Perm.Count"] == 0))
+
+# Compare to pairs that share reactions.
+rxnPairs <- paste(myres10[which(sharesRxn == TRUE), "Analyte1"], 
+                        myres10[which(sharesRxn == TRUE), "Analyte2"], sep = "__V__")
+length(which(summaryPairs[which(summaryPairs$Pair %in% rxnPairs), "Perm.Count"] == 0))
 ```
 
 ### Reference
