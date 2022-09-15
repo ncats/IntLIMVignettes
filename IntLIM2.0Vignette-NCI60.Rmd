@@ -65,11 +65,24 @@ PlotPCA(inputDatafilt, stype = "drugscore")
 
 ## Running Linear Model
 
-The linear model for integrating multi-omics and data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels differs by phenotype. We run a linear model that included 16,188 genes and 280 metabolites (total of 4,532,640 possible associations and hence models).  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (a_j:p) term, and __DistRSquared()__ allows us to obtain a distribution of R^2 values for the models. __InteractionCoefficientGraph()__ allows us to obtain an ordered plot of the (a_j:p) term coefficients.  We also show a volcano plot showing the relationship between interaction coefficients and unadjusted p-values using __pvalCoefVolcano()__.  
+The linear model for integrating multi-omics and data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels differs by phenotype. We run a linear model that included 16,188 genes and 280 metabolites (total of 4,532,640 possible associations and hence models).  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (a_j:p) term, and __DistRSquared()__ allows us to obtain a distribution of R^2 values for the models. __InteractionCoefficientGraph()__ allows us to obtain an ordered plot of the (a_j:p) term coefficients.  We also show a volcano plot showing the relationship between interaction coefficients and unadjusted p-values using __pvalCoefVolcano()__.
+
+Covariates (e.g. age and batch) may also be included in the models as a list using the
+__covar__ parameter. Please be advised that not all covariates in the experiment need be included.
+In particular, colliders (variables influenced by one or more other variables) should not be
+included, and potential confounding variables should be included. The choice of covariates
+should be determined by the experiment.
+
+Note that the user must select either analyte type 1 or analyte type 2 for the 
+independent and outcome variables. This choice should be biologically motivated.
+For instance, if the user wants to investigate metabolite abundances that are 
+influenced by gene expression level and metabolite abundance is analyte type 1 and
+gene expression is analyte type 2, then the outcome would be analyte type 1 and
+the independent variable would be analyte type 2.
 
 ```{r}
 myres <- IntLIM::RunIntLim(inputDatafilt, stype="drugscore", continuous = TRUE,
-                           independent.var.type = 1, outcome = 2)
+                           independent.var.type = 1, outcome = 2, save.covar.pvals = TRUE)
 IntLIM::DistPvalues(myres, adjusted = FALSE)
 IntLIM::DistRSquared(myres)
 IntLIM::InteractionCoefficientGraph(inputResults = myres, 
@@ -79,11 +92,16 @@ IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
 ```
 
 The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (a_j:p) association coefficient. We further may only interested in results where the interaction coefficient is in the top Xth percentile (e.g. 50th shown here) and where the model fit as measured by R^2 value is above a given cutoff (e.g. 0.2). This is done with the __ProcessResults()__ function.
+
+It is also possible to filter for significant main effects (independent analyte level
+or phenotype). Users can then determine which significant pairs also have significant main effects.
 ```{r}
 myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0,
-                                    interactionCoeffPercentile = 0.5)
-myres.sig <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0,
-                                    interactionCoeffPercentile = 0)
+                                    coeffPercentile = 0.5)
+myres.sig.stype <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0,
+                                    coeffPercentile = 0.5, coefficient = "stype")
+myres.sig.a <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10, rsquaredCutoff = 0,
+                                    coeffPercentile = 0.5, coefficient = "analyte")
 OutputResults(inputResults = myres.sig, filename = "NCI60pairs.csv")
 ```
 
@@ -112,18 +130,37 @@ str(myres.sig[which(myres.sig$Analyte2 == "cholesterol"),])
 
 We can show some example plots of some of these pairs.  The first example is the HHAT vs. cholesterol.
 
+The __PlotPairResiduals()__ function plots the standardized residuals for a given
+pair, allowing the user to determine whether model assumptions are fulfilled. In
+the example below, there is a slight linear trend in the residuals, indicating that
+the relationship between HHAT and cholesterol may better be approximated by a more
+complex model.
+
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, 
                  independentAnalyteOfInterest = "HHAT", 
                  outcomeAnalyteOfInterest = "cholesterol",
                  independentVariable = 1,
                  outcome = 2)
+IntLIM::PlotPairResiduals(inputDatafilt, myres, 
+                 independentAnalyteOfInterest = "HHAT", 
+                 outcomeAnalyteOfInterest = "cholesterol",
+                 independentVariable = 1,
+                 outcome = 2)
 ```
 
-Another example is CDKN1A vs. cholesterol.
+Another example is CDKN1A vs. cholesterol. In
+the example below, there is a linear trend in the residuals, indicating that
+the relationship between CDKN1A and cholesterol may better be approximated by a more
+complex model.
 
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, 
+                 independentAnalyteOfInterest = "CDKN1A", 
+                 outcomeAnalyteOfInterest = "cholesterol",
+                 independentVariable = 1,
+                 outcome = 2)
+IntLIM::PlotPairResiduals(inputDatafilt, myres, 
                  independentAnalyteOfInterest = "CDKN1A", 
                  outcomeAnalyteOfInterest = "cholesterol",
                  independentVariable = 1,

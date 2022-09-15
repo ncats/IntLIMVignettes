@@ -67,7 +67,20 @@ IntLIM::PlotPCA(inputDatafilt, stype = "DIAG")
 
 The linear model is for integrating multi-omics data is:  a_i = β0 + β1 a_j + β2 p + β3 (a_j:p) + Σ(β(3+c) C) + ε where ‘a_i’ and ‘a_j’ are (optionally log-transformed) analyte abundances, ‘p’ is phenotype (cancer type, patient diagnosis, treatment group, etc), ‘(a_j:p)’ is the association between analyte level and phenotype, C is a set of clinical covariates (e.g. age, sex, etc), c is a covariate index, and ‘ε’ is the error term that is normally distributed.  A statistically significant p-value of the ‘(a_j:p)’ association term indicates that the slope relating analyte levels is different from one phenotype compared to another. We run a linear model on tumor (n = 61) and non-tumor samples (n = 47) that included 18,228 genes and 536 metabolites (total of 9,770,208 possible associations and hence models).  The model is run as below by calling __RunIntLim()__.  __DistPvalues()__ allows us to obtain a distribution of p-values for the (a_j:p) term, and __DistRSquared()__ allows us to obtain a distribution of R^2 values for the models. __InteractionCoefficientGraph()__ allows us to obtain an ordered plot of the (a_j:p) term coefficients.  We also show a volcano plot showing the relationship between interaction coefficients and unadjusted p-values using __pvalCoefVolcano()__.   
 
-```{r}
+Covariates (e.g. age and batch) may also be included in the models as a list using the
+__covar__ parameter. Please be advised that not all covariates in the experiment need be included.
+In particular, colliders (variables influenced by one or more other variables) should not be
+included, and potential confounding variables should be included. The choice of covariates
+should be determined by the experiment.
+
+Note that the user must select either analyte type 1 or analyte type 2 for the 
+independent and outcome variables. This choice should be biologically motivated.
+For instance, if the user wants to investigate metabolite abundances that are 
+influenced by gene expression level and metabolite abundance is analyte type 1 and
+gene expression is analyte type 2, then the outcome would be analyte type 1 and
+the independent variable would be analyte type 2.
+
+```{r warning=FALSE,error=FALSE}
 myres <- IntLIM::RunIntLim(inputDatafilt, stype="DIAG", covar = c("AGE", "RACE.ETHNICITY"), outcome = 2, independent.var.type = 1, suppressWarnings = TRUE,
                            save.covar.pvals = TRUE)
 IntLIM::DistPvalues(myres, adjusted = FALSE)
@@ -76,42 +89,77 @@ IntLIM::pvalCoefVolcano(inputResults = myres, inputData = inputDatafilt,
 ```
 
 The next step is to process the results of this model by filtering the results of the linear model by FDR-adjusted p-value cutoff (0.10 selected here) for the (a_j:p) association coefficient.  We further may only interested in results where the interaction coefficient is in the top Xth percentile (e.g. 50th shown here) and where the model fit as measured by R^2 value is above a given cutoff (e.g. 0.2). This is done with the __ProcessResults()__ function.
+
+It is also possible to filter for significant main effects (independent analyte level
+or phenotype). Users can then determine which significant pairs also have significant main effects.
 ```{r}
 myres10 <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10,
-                                  interactionCoeffPercentile = 0.5,
+                                  coeffPercentile = 0.5,
                                   rsquaredCutoff = 0.2)
+myres10.stype <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10,
+                                  coeffPercentile = 0.5,
+                                  rsquaredCutoff = 0.2, coefficient = "stype")
+myres10.a <- IntLIM::ProcessResults(myres,  inputDatafilt, pvalcutoff = 0.10,
+                                  coeffPercentile = 0.5,
+                                  rsquaredCutoff = 0.2, coefficient = "analyte")
+
 
 IntLIM::OutputResults(inputResults = myres10, filename = "bcresults10_race_age.csv")
 ```
-
-We find that we obtain 18,641 pairs.
+We find that we obtain 14,583 pairs.
 
 We can show some example plots of some of these pairs.  The first example is the ASNS vs. glutamine.  
+
+The __PlotPairResiduals()__ function plots the standardized residuals for a given
+pair, allowing the user to determine whether model assumptions are fulfilled. In
+the example below, the residuals are not affected by glutamine levels.
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "ASNS", 
                  outcomeAnalyteOfInterest = "glutamine",
                  independentVariable = 1,
                  outcome = 2)
+IntLIM::PlotPairResiduals(inputDatafilt, myres, independentAnalyteOfInterest = "ASNS", 
+                 outcomeAnalyteOfInterest = "glutamine",
+                 independentVariable = 1,
+                 outcome = 2)
 ```
 The second example is the SLC7A1 vs. glutamine.  
+The residuals are not affected by glutamine levels.
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "SLC7A1", 
+                 outcomeAnalyteOfInterest = "glutamine",
+                 independentVariable = 1,
+                 outcome = 2)
+IntLIM::PlotPairResiduals(inputDatafilt, myres, independentAnalyteOfInterest = "SLC7A1", 
                  outcomeAnalyteOfInterest = "glutamine",
                  independentVariable = 1,
                  outcome = 2)
 ```
 
 We also find that the pair 2-hydroxyglutarate and GPT2 is significant.  
+However, the residuals increase as 2-hydroxyglutarate levels increase,
+indicating that the predictions are biased toward the average value.
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "GPT2", 
+                 outcomeAnalyteOfInterest = "2-hydroxyglutarate",
+                 independentVariable = 1,
+                 outcome = 2)
+IntLIM::PlotPairResiduals(inputDatafilt, myres, independentAnalyteOfInterest = "GPT2", 
                  outcomeAnalyteOfInterest = "2-hydroxyglutarate",
                  independentVariable = 1,
                  outcome = 2)
 ```
 
 2-hydroxyglutarate and MYC are not linked as was in the Ambs paper.  
+However, the residuals increase as 2-hydroxyglutarate levels increase,
+indicating that the predictions are biased toward the average value. A non-linear
+model might better capture the relationship between 2-hydroxyglutarate and MYC.
 ```{r}
 IntLIM::PlotPair(inputDatafilt, myres, independentAnalyteOfInterest = "MYC", 
+                 outcomeAnalyteOfInterest = "2-hydroxyglutarate",
+                 independentVariable = 1,
+                 outcome = 2)
+IntLIM::PlotPairResiduals(inputDatafilt, myres, independentAnalyteOfInterest = "MYC", 
                  outcomeAnalyteOfInterest = "2-hydroxyglutarate",
                  independentVariable = 1,
                  outcome = 2)
@@ -171,14 +219,14 @@ sharesRxn <- lapply(1:nrow(myres10), function(i){
 
 ## Cross-Validation
 
-We then run 5-fold cross-validation to determine the overlap of significant pairs across folds.
+We then run 2-fold cross-validation to determine the overlap of significant pairs across folds.
 We use the same p-value, interaction coefficient, and R^2 cutoffs. To replicate leave-one-out cross-validation as shown in the paper, change __folds__ from 5 to 108.
-```{r results = FALSE}
+```{r results = FALSE,warning=FALSE,error=FALSE}
 folds <- 5
 crossValResults <- IntLIM::RunCrossValidation(inputData = inputData, analyteType1perc = 0.10, 
                    analyteMiss = 0.80, stype="DIAG", outcome = c(2), 
                    independent.var.type = c(1), pvalcutoff = 0.10, 
-                   rsquaredCutoff = 0.2,
+                   rsquaredCutoff = 0.2, suppressWarnings = TRUE,
                    folds = 5, interactionCoeffPercentile = 0.5,
                    covar = c("AGE", "RACE.ETHNICITY"))
 IntLIM::PlotFoldOverlapUpSet(crossValResults$processed)
@@ -198,7 +246,7 @@ length(which(foldCountResults > folds / 2))
 
 ## Permutation
 
-Finally, we run 5 permutations of the data. For large datasets and high numbers of permutations,
+Finally, we run 2 permutations of the data. For large datasets and high numbers of permutations,
 you may wish to run your code on a supercomputer. For very large datasets, you may wish to 
 create several batch jobs on a supercomputer, each of which calls __PermuteIntLIM()__ with 
 num.permutations = 1, and then concatenate the results after all jobs have completed. If you do 
@@ -211,11 +259,11 @@ variable analytes, and outcome analytes per permutation. Furthermore, a violin p
 be generated by setting plot = TRUE. In addition, __PermutationPairSummary()__ computes
 the number of permutations in which each pair was found to be significant. This can
 also be visualized using a horizontal bar plot.
-```{r results = FALSE}
+```{r results = FALSE, warning=FALSE,error=FALSE}
 perm.res <- IntLIM::PermuteIntLIM(data = inputDatafilt, stype = "DIAG", outcome = 2,
                       independent.var.type = 1, pvalcutoff = 0.10, interactionCoeffPercentile = 0.5, 
                    rsquaredCutoff = 0.2,
-                   num.permutations = 5,
+                   num.permutations = 2,
                    covar = c("AGE", "RACE.ETHNICITY"))
 summaryCount <- IntLIM::PermutationCountSummary(permResults = perm.res, inputResults = myres10,
                               plot = TRUE)
